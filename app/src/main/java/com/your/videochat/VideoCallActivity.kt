@@ -4,9 +4,12 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
-import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.TextView
+import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -20,14 +23,21 @@ class VideoCallActivity : AppCompatActivity() {
 
     private lateinit var localVideoView: SurfaceViewRenderer
     private lateinit var remoteVideoView: SurfaceViewRenderer
-    private lateinit var micButton: Button
-    private lateinit var cameraButton: Button
-    private lateinit var endCallButton: Button
-    private lateinit var chatButton: Button
+    private lateinit var micButton: ImageButton
+    private lateinit var cameraButton: ImageButton
+    private lateinit var endCallButton: ImageButton
+    private lateinit var chatButton: ImageButton
     private lateinit var chatLayout: LinearLayout
     private lateinit var chatInput: EditText
-    private lateinit var sendChatButton: Button
+    private lateinit var sendChatButton: ImageButton
     private lateinit var chatMessages: LinearLayout
+    private lateinit var roomNameTextView: TextView
+    private lateinit var callDurationTextView: TextView
+
+    private var isMicEnabled = true
+    private var isCameraEnabled = true
+    private var callStartTime: Long = 0
+    private val callDurationHandler = Handler(Looper.getMainLooper())
 
     private var peerConnection: PeerConnection? = null
     private var localVideoTrack: VideoTrack? = null
@@ -91,6 +101,10 @@ class VideoCallActivity : AppCompatActivity() {
         chatInput = findViewById(R.id.chatInput)
         sendChatButton = findViewById(R.id.sendChatButton)
         chatMessages = findViewById(R.id.chatMessages)
+        roomNameTextView = findViewById(R.id.roomNameTextView)
+        callDurationTextView = findViewById(R.id.callDurationTextView)
+
+        roomNameTextView.text = roomId
 
         micButton.setOnClickListener { toggleMic() }
         cameraButton.setOnClickListener { toggleCamera() }
@@ -144,6 +158,8 @@ class VideoCallActivity : AppCompatActivity() {
                         remoteVideoTrack = mediaStreamTrack
                         mediaStreamTrack.addSink(remoteVideoView)
                         Log.d(TAG, "Remote video track added")
+                        // Start call duration timer when call is connected
+                        startCallDurationTimer()
                     }
                 }
             }
@@ -154,6 +170,8 @@ class VideoCallActivity : AppCompatActivity() {
                     runOnUiThread {
                         remoteVideoTrack = it
                         it.addSink(remoteVideoView)
+                        // Start call duration timer when call is connected
+                        startCallDurationTimer()
                     }
                 }
             }
@@ -472,15 +490,17 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun toggleMic() {
         localAudioTrack?.let { track ->
-            track.setEnabled(!track.enabled())
-            micButton.text = if (track.enabled()) "🎤" else "🔇"
+            isMicEnabled = !isMicEnabled
+            track.setEnabled(isMicEnabled)
+            micButton.setImageResource(if (isMicEnabled) R.drawable.ic_mic else R.drawable.ic_mic_off)
         }
     }
 
     private fun toggleCamera() {
         localVideoTrack?.let { track ->
-            track.setEnabled(!track.enabled())
-            cameraButton.text = if (track.enabled()) "📷" else "📷❌"
+            isCameraEnabled = !isCameraEnabled
+            track.setEnabled(isCameraEnabled)
+            cameraButton.setImageResource(if (isCameraEnabled) R.drawable.ic_videocam else R.drawable.ic_videocam_off)
         }
     }
 
@@ -498,6 +518,7 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun endCall() {
         Log.d(TAG, "Ending call")
+        stopCallDurationTimer()
         peerConnection?.close()
         webSocket?.close(1000, "Call ended")
         finish()
@@ -532,9 +553,30 @@ class VideoCallActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopHeartbeat()
+        stopCallDurationTimer()
         localVideoView.release()
         remoteVideoView.release()
         eglBase.release()
+    }
+
+    // Call Duration Timer
+    private val callDurationRunnable = object : Runnable {
+        override fun run() {
+            val elapsedSeconds = (System.currentTimeMillis() - callStartTime) / 1000
+            val minutes = elapsedSeconds / 60
+            val seconds = elapsedSeconds % 60
+            callDurationTextView.text = String.format("%02d:%02d", minutes, seconds)
+            callDurationHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun startCallDurationTimer() {
+        callStartTime = System.currentTimeMillis()
+        callDurationHandler.post(callDurationRunnable)
+    }
+
+    private fun stopCallDurationTimer() {
+        callDurationHandler.removeCallbacks(callDurationRunnable)
     }
 
     class SimpleSdpObserver : SdpObserver {

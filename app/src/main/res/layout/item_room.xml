@@ -4,42 +4,63 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="4dp"
-    app:cardCornerRadius="8dp"
+    app:cardBackgroundColor="@color/background_input"
+    app:cardCornerRadius="16dp"
     app:cardElevation="2dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp">
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <!-- Room Icon -->
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_videocam"
+            android:background="@drawable/circle_button_modern"
+            android:padding="8dp"
+            android:contentDescription="Room" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
 
             <TextView
                 android:id="@+id/roomNameText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Room Name"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/usersCountText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="1 участник"
-                android:textColor="#666666"
-                android:textSize="14sp" />
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:drawableStart="@drawable/ic_people"
+                android:drawablePadding="4dp"
+                android:gravity="center_vertical" />
         </LinearLayout>
 
         <Button
             android:id="@+id/joinRoomButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Войти" />
+            android:text="Войти"
+            android:background="@drawable/button_primary"
+            android:textColor="@color/text_primary"
+            android:textAllCaps="false"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp" />
     </LinearLayout>
 </androidx.cardview.widget.CardView>

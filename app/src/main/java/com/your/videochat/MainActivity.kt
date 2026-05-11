@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -27,11 +28,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var serverUrlInput: EditText
     private lateinit var roomNameInput: EditText
     private lateinit var createRoomButton: Button
-    private lateinit var emulatorButton: Button
-    private lateinit var deviceButton: Button
     private lateinit var roomsRecyclerView: RecyclerView
     private lateinit var emptyRoomsText: TextView
     private lateinit var connectionStatus: TextView
+    private lateinit var loadingIndicator: ProgressBar
+    private lateinit var statusDot: View
     
     private var webSocket: WebSocket? = null
     private val client = OkHttpClient()
@@ -51,11 +52,11 @@ class MainActivity : AppCompatActivity() {
         serverUrlInput = findViewById(R.id.serverUrlInput)
         roomNameInput = findViewById(R.id.roomNameInput)
         createRoomButton = findViewById(R.id.createRoomButton)
-        emulatorButton = findViewById(R.id.emulatorButton)
-        deviceButton = findViewById(R.id.deviceButton)
         roomsRecyclerView = findViewById(R.id.roomsRecyclerView)
         emptyRoomsText = findViewById(R.id.emptyRoomsText)
         connectionStatus = findViewById(R.id.connectionStatus)
+        loadingIndicator = findViewById(R.id.loadingIndicator)
+        statusDot = findViewById(R.id.statusDot)
 
         roomsAdapter = RoomsAdapter(rooms) { room ->
             joinRoom(room.id)
@@ -70,17 +71,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Введите название комнаты", Toast.LENGTH_SHORT).show()
             }
-        }
-
-        // Быстрые кнопки URL
-        emulatorButton.setOnClickListener {
-            serverUrlInput.setText("ws://10.0.2.2:3000")
-            connectToServer()
-        }
-
-        deviceButton.setOnClickListener {
-            serverUrlInput.setText("wss://your-app-name.onrender.com")
-            connectToServer()
         }
 
         // Подключаемся к серверу при изменении URL
@@ -100,8 +90,12 @@ class MainActivity : AppCompatActivity() {
         if (url.isEmpty()) return
 
         SERVER_URL = url
-        connectionStatus.text = "Подключение..."
-        connectionStatus.setTextColor(0xFFFF6600.toInt())
+        runOnUiThread {
+            connectionStatus.text = "Подключение..."
+            connectionStatus.setTextColor(resources.getColor(R.color.status_connecting, null))
+            loadingIndicator.visibility = View.VISIBLE
+            statusDot.visibility = View.GONE
+        }
 
         webSocket?.close(1000, "Reconnecting")
 
@@ -110,7 +104,10 @@ class MainActivity : AppCompatActivity() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 runOnUiThread {
                     connectionStatus.text = "Подключено"
-                    connectionStatus.setTextColor(0xFF00AA00.toInt())
+                    connectionStatus.setTextColor(resources.getColor(R.color.status_connected, null))
+                    loadingIndicator.visibility = View.GONE
+                    statusDot.visibility = View.VISIBLE
+                    statusDot.setBackgroundResource(R.drawable.circle_button_modern)
                     Log.d(TAG, "WebSocket connected")
                 }
                 // Запускаем heartbeat
@@ -161,7 +158,10 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 runOnUiThread {
                     connectionStatus.text = "Ошибка подключения: ${t.message}"
-                    connectionStatus.setTextColor(0xFFFF0000.toInt())
+                    connectionStatus.setTextColor(resources.getColor(R.color.status_error, null))
+                    loadingIndicator.visibility = View.GONE
+                    statusDot.visibility = View.VISIBLE
+                    statusDot.setBackgroundResource(R.drawable.button_danger)
                     Log.e(TAG, "WebSocket failure: ${t.message}")
                 }
                 stopHeartbeat()

@@ -1,10 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Primary Purple Palette -->
+    <color name="purple_primary">#8B5CF6</color>
+    <color name="purple_primary_dark">#7C3AED</color>
+    <color name="purple_primary_light">#A78BFA</color>
+    <color name="purple_gradient_start">#A855F7</color>
+    <color name="purple_gradient_end">#6366F1</color>
+    
+    <!-- Accent Colors -->
+    <color name="accent_pink">#EC4899</color>
+    <color name="accent_blue">#3B82F6</color>
+    <color name="accent_cyan">#06B6D4</color>
+    
+    <!-- Background Colors -->
+    <color name="background_primary">#0F0A1A</color>
+    <color name="background_secondary">#1A1025</color>
+    <color name="background_card">#1E1529</color>
+    <color name="background_input">#2A1F3D</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A78BFA</color>
+    <color name="text_hint">#6B7280</color>
+    
+    <!-- Status Colors -->
+    <color name="status_connected">#10B981</color>
+    <color name="status_connecting">#F59E0B</color>
+    <color name="status_error">#EF4444</color>
+    
+    <!-- Button Colors -->
+    <color name="button_primary">#8B5CF6</color>
+    <color name="button_primary_pressed">#7C3AED</color>
+    <color name="button_secondary">#374151</color>
+    <color name="button_danger">#EF4444</color>
+    
+    <!-- Overlay Colors -->
+    <color name="overlay_dark">#80000000</color>
+    <color name="overlay_light">#40FFFFFF</color>
+    
+    <!-- Standard Colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
 </resources>
