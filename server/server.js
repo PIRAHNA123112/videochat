@@ -4,7 +4,21 @@ const express = require('express');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+
+// WebSocket сервер с обработкой upgrade
+const wss = new WebSocket.Server({
+    server,
+    verifyClient: (info, callback) => {
+        callback(true); // Разрешаем все подключения
+    }
+});
+
+// Обработка upgrade запросов
+server.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
+});
 
 // CORS для HTTP запросов
 app.use((req, res, next) => {
