@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Удалённое видео (на весь экран) -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/remoteVideoView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Локальное видео (маленькое окно в углу) -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/localVideoView"
+        android:layout_width="120dp"
+        android:layout_height="180dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:background="#80000000" />
+
+    <!-- Панель управления звонком -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="16dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/micButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/circle_button"
+            android:text="🎤"
+            android:textSize="24sp" />
+
+        <Button
+            android:id="@+id/cameraButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/circle_button"
+            android:text="📷"
+            android:textSize="24sp" />
+
+        <Button
+            android:id="@+id/chatButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/circle_button"
+            android:text="💬"
+            android:textSize="24sp" />
+
+        <Button
+            android:id="@+id/endCallButton"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:background="@drawable/end_call_button"
+            android:text="📞"
+            android:textSize="24sp" />
+    </LinearLayout>
+
+    <!-- Чат панель (скрыта по умолчанию) -->
+    <LinearLayout
+        android:id="@+id/chatLayout"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="16dp"
+        android:background="#E0000000"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Чат"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:id="@+id/chatMessages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/chatInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="#40FFFFFF"
+                android:hint="Введите сообщение"
+                android:padding="8dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#80FFFFFF" />
+
+            <Button
+                android:id="@+id/sendChatButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Отправить" />
+        </LinearLayout>
+    </LinearLayout>
+</RelativeLayout>
