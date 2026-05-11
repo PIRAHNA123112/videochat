@@ -185,10 +185,8 @@ class MainActivity : AppCompatActivity() {
         heartbeatRunnable = object : Runnable {
             override fun run() {
                 webSocket?.let { ws ->
-                    if (ws.queueSize == 0L) { // Проверяем что соединение открыто
-                        ws.send("{\"type\":\"ping\"}")
-                        Log.d(TAG, "Sent ping")
-                    }
+                    ws.send("{\"type\":\"ping\"}")
+                    Log.d(TAG, "Sent ping")
                 }
                 heartbeatHandler.postDelayed(this, 25000) // Каждые 25 секунд
             }
