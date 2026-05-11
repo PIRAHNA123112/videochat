@@ -106,6 +106,9 @@ function handleMessage(ws, data) {
         case 'get-rooms':
             sendRoomsList(ws);
             break;
+        case 'chat-message':
+            handleChatMessage(ws, data);
+            break;
         default:
             console.log('Неизвестный тип сообщения:', data.type);
     }
@@ -219,6 +222,29 @@ function handleLeave(ws, data) {
     
     clients.delete(userId);
     console.log(`Пользователь ${userId} покинул комнату ${roomId}`);
+}
+
+function handleChatMessage(ws, data) {
+    const { roomId, userId, message } = data;
+    const timestamp = Date.now();
+
+    console.log(`Chat message from ${userId} in room ${roomId}: ${message}`);
+
+    // Отправляем сообщение всем участникам комнаты
+    if (rooms.has(roomId)) {
+        const room = rooms.get(roomId);
+        room.forEach(otherUserId => {
+            const client = clients.get(otherUserId);
+            if (client && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'chat-message',
+                    userId: userId,
+                    message: message,
+                    timestamp: timestamp
+                }));
+            }
+        });
+    }
 }
 
 function handleDisconnect(ws) {

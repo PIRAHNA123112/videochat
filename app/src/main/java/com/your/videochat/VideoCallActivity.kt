@@ -350,6 +350,12 @@ class VideoCallActivity : AppCompatActivity() {
                     remoteUserId = ""
                     Log.d(TAG, "User left the room")
                 }
+                "chat-message" -> {
+                    val senderId = json.getString("userId")
+                    val msg = json.getString("message")
+                    val timestamp = json.getLong("timestamp")
+                    handleChatMessage(senderId, msg, timestamp)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling message: ${e.message}")
@@ -510,10 +516,44 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun sendChatMessage() {
-        val message = chatInput.text.toString()
+        val message = chatInput.text.toString().trim()
         if (message.isNotEmpty()) {
-            // TODO: Отправить сообщение через signalling сервер
+            val jsonMessage = JSONObject().apply {
+                put("type", "chat-message")
+                put("roomId", roomId)
+                put("userId", userId)
+                put("message", message)
+            }
+            webSocket?.send(jsonMessage.toString())
             chatInput.text.clear()
+        }
+    }
+
+    private fun handleChatMessage(userId: String, message: String, timestamp: Long) {
+        runOnUiThread {
+            addChatMessage(userId, message, timestamp)
+        }
+    }
+
+    private fun addChatMessage(senderId: String, message: String, timestamp: Long) {
+        val messageView = layoutInflater.inflate(R.layout.item_chat_message, chatMessages, false)
+
+        val senderText = messageView.findViewById<TextView>(R.id.senderText)
+        val messageText = messageView.findViewById<TextView>(R.id.messageText)
+        val timeText = messageView.findViewById<TextView>(R.id.timeText)
+
+        senderText.text = if (senderId == userId) "Вы" else senderId.takeLast(4)
+        messageText.text = message
+
+        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        timeText.text = sdf.format(java.util.Date(timestamp))
+
+        chatMessages.addView(messageView)
+
+        // Прокрутка к последнему сообщению
+        val scrollView = chatMessages.parent as? android.widget.ScrollView
+        scrollView?.post {
+            scrollView.fullScroll(View.FOCUS_DOWN)
         }
     }
 
