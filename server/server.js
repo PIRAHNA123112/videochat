@@ -74,7 +74,7 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Проверка живых соединений каждые 30 секунд
+// Проверка живых соединений каждые 15 секунд
 const heartbeatInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
@@ -84,7 +84,7 @@ const heartbeatInterval = setInterval(() => {
         ws.isAlive = false;
         ws.ping();
     });
-}, 30000);
+}, 15000);
 
 function handleMessage(ws, data) {
     switch (data.type) {

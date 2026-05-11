@@ -179,6 +179,7 @@ class MainActivity : AppCompatActivity() {
 
     private val heartbeatHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var heartbeatRunnable: Runnable? = null
+    private var roomsUpdateRunnable: Runnable? = null
 
     private fun startHeartbeat() {
         heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
@@ -188,15 +189,29 @@ class MainActivity : AppCompatActivity() {
                     ws.send("{\"type\":\"ping\"}")
                     Log.d(TAG, "Sent ping")
                 }
-                heartbeatHandler.postDelayed(this, 25000) // Каждые 25 секунд
+                heartbeatHandler.postDelayed(this, 10000) // Каждые 10 секунд
             }
         }
         heartbeatHandler.post(heartbeatRunnable!!)
+
+        // Автоматическое обновление списка комнат
+        roomsUpdateRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        roomsUpdateRunnable = object : Runnable {
+            override fun run() {
+                webSocket?.let { ws ->
+                    ws.send("{\"type\":\"get-rooms\"}")
+                }
+                heartbeatHandler.postDelayed(this, 5000) // Каждые 5 секунд
+            }
+        }
+        heartbeatHandler.post(roomsUpdateRunnable!!)
     }
 
     private fun stopHeartbeat() {
         heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
         heartbeatRunnable = null
+        roomsUpdateRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        roomsUpdateRunnable = null
     }
 
     private fun joinRoom(roomId: String) {

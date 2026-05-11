@@ -314,7 +314,7 @@ class VideoCallActivity : AppCompatActivity() {
                     ws.send("{\"type\":\"ping\"}")
                     Log.d(TAG, "Sent ping")
                 }
-                heartbeatHandler.postDelayed(this, 25000) // Каждые 25 секунд
+                heartbeatHandler.postDelayed(this, 10000) // Каждые 10 секунд
             }
         }
         heartbeatHandler.post(heartbeatRunnable!!)
