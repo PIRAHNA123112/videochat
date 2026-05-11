@@ -42,12 +42,23 @@ const clients = new Map();
 wss.on('connection', (ws) => {
     console.log('Новое подключение');
     
+    // Heartbeat для поддержания соединения
+    ws.isAlive = true;
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+    
     // Отправляем список комнат при подключении
     sendRoomsList(ws);
     
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+            // Обрабатываем ping от клиента
+            if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                return;
+            }
             handleMessage(ws, data);
         } catch (error) {
             console.error('Ошибка обработки сообщения:', error);
@@ -62,6 +73,18 @@ wss.on('connection', (ws) => {
         console.error('WebSocket ошибка:', error);
     });
 });
+
+// Проверка живых соединений каждые 30 секунд
+const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+            console.log('Соединение не отвечает, закрываем');
+            return ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
 
 function handleMessage(ws, data) {
     switch (data.type) {

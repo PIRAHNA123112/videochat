@@ -113,12 +113,19 @@ class MainActivity : AppCompatActivity() {
                     connectionStatus.setTextColor(0xFF00AA00.toInt())
                     Log.d(TAG, "WebSocket connected")
                 }
+                // Запускаем heartbeat
+                startHeartbeat()
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val json = JSONObject(text)
                     val type = json.getString("type")
+
+                    // Игнорируем pong сообщения
+                    if (type == "pong") {
+                        return
+                    }
 
                     if (type == "rooms-list") {
                         val roomsArray = json.getJSONArray("rooms")
@@ -157,6 +164,7 @@ class MainActivity : AppCompatActivity() {
                     connectionStatus.setTextColor(0xFFFF0000.toInt())
                     Log.e(TAG, "WebSocket failure: ${t.message}")
                 }
+                stopHeartbeat()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -164,8 +172,33 @@ class MainActivity : AppCompatActivity() {
                     connectionStatus.text = "Отключено"
                     connectionStatus.setTextColor(0xFFFF6600.toInt())
                 }
+                stopHeartbeat()
             }
         })
+    }
+
+    private val heartbeatHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var heartbeatRunnable: Runnable? = null
+
+    private fun startHeartbeat() {
+        heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        heartbeatRunnable = object : Runnable {
+            override fun run() {
+                webSocket?.let { ws ->
+                    if (ws.queueSize == 0L) { // Проверяем что соединение открыто
+                        ws.send("{\"type\":\"ping\"}")
+                        Log.d(TAG, "Sent ping")
+                    }
+                }
+                heartbeatHandler.postDelayed(this, 25000) // Каждые 25 секунд
+            }
+        }
+        heartbeatHandler.post(heartbeatRunnable!!)
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        heartbeatRunnable = null
     }
 
     private fun joinRoom(roomId: String) {
@@ -177,6 +210,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopHeartbeat()
         webSocket?.close(1000, "Activity destroyed")
     }
 }

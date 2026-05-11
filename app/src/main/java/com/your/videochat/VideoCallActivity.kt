@@ -251,9 +251,14 @@ class VideoCallActivity : AppCompatActivity() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket connected!")
                 joinRoom()
+                startHeartbeat()
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                // Игнорируем pong сообщения
+                if (text.contains("\"type\":\"pong\"")) {
+                    return
+                }
                 Log.d(TAG, "Received message: $text")
                 handleSignallingMessage(text)
             }
@@ -261,19 +266,44 @@ class VideoCallActivity : AppCompatActivity() {
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closing: $code - $reason")
                 webSocket.close(code, reason)
+                stopHeartbeat()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code - $reason")
+                stopHeartbeat()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure: ${t.message}")
                 t.printStackTrace()
+                stopHeartbeat()
             }
         }
 
         webSocket = client.newWebSocket(request, listener)
+    }
+
+    private val heartbeatHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var heartbeatRunnable: Runnable? = null
+
+    private fun startHeartbeat() {
+        heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        heartbeatRunnable = object : Runnable {
+            override fun run() {
+                webSocket?.let { ws ->
+                    ws.send("{\"type\":\"ping\"}")
+                    Log.d(TAG, "Sent ping")
+                }
+                heartbeatHandler.postDelayed(this, 25000) // Каждые 25 секунд
+            }
+        }
+        heartbeatHandler.post(heartbeatRunnable!!)
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatRunnable?.let { heartbeatHandler.removeCallbacks(it) }
+        heartbeatRunnable = null
     }
 
     private fun joinRoom() {
@@ -501,6 +531,7 @@ class VideoCallActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopHeartbeat()
         localVideoView.release()
         remoteVideoView.release()
         eglBase.release()
