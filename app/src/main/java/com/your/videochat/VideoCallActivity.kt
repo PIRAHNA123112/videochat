@@ -8,6 +8,7 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.cardview.widget.CardView
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
@@ -27,7 +28,7 @@ class VideoCallActivity : AppCompatActivity() {
     private lateinit var cameraButton: ImageButton
     private lateinit var endCallButton: ImageButton
     private lateinit var chatButton: ImageButton
-    private lateinit var chatLayout: LinearLayout
+    private lateinit var chatLayout: CardView
     private lateinit var chatInput: EditText
     private lateinit var sendChatButton: ImageButton
     private lateinit var chatMessages: LinearLayout
