@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         // Public server URL - change this to your deployed server
-        private var SERVER_URL = "wss://your-app-name.onrender.com" 
+        private var SERVER_URL = "wss://videochat-aend.onrender.com"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

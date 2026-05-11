@@ -4,7 +4,7 @@ const express = require('express');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws' });
+const wss = new WebSocket.Server({ server });
 
 // CORS для HTTP запросов
 app.use((req, res, next) => {
