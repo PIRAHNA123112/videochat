@@ -771,6 +771,7 @@ class VideoCallActivity : AppCompatActivity() {
                 
                 // Закрываем старое соединение
                 peerConnection?.close()
+                Log.w(TAG, "⚠️ PeerConnection set to null in reconnectWebSocket()")
                 peerConnection = null
                 
                 // Сбрасываем счетчик ICE проверок
@@ -855,10 +856,16 @@ class VideoCallActivity : AppCompatActivity() {
             return
         }
         
-        // PeerConnection уже создан в initializeWebRTC()
+        // Если PeerConnection null, создаем его заново
         if (peerConnection == null) {
-            Log.e(TAG, "❌ PeerConnection is null - should be created in initializeWebRTC()")
-            return
+            Log.w(TAG, "⚠️ PeerConnection is null, recreating...")
+            createPeerConnection()
+            
+            if (peerConnection == null) {
+                Log.e(TAG, "❌ Failed to recreate PeerConnection")
+                return
+            }
+            Log.d(TAG, "✅ PeerConnection recreated successfully")
         }
         
         // Создаем аудио источник с правильными ограничениями
@@ -1898,6 +1905,7 @@ class VideoCallActivity : AppCompatActivity() {
         
         // Удаляем старое соединение
         peerConnection?.close()
+        Log.w(TAG, "⚠️ PeerConnection set to null in recreatePeerConnection()")
         peerConnection = null
         
         // Создаем новое
@@ -2417,6 +2425,7 @@ class VideoCallActivity : AppCompatActivity() {
         
         try {
             peerConnection?.close()
+            Log.w(TAG, "⚠️ PeerConnection set to null in onDestroy()")
             peerConnection = null
         } catch (e: Exception) {
             Log.e(TAG, "Error closing PeerConnection: ${e.message}")
