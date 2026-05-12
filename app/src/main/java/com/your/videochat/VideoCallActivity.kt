@@ -1823,16 +1823,12 @@ class VideoCallActivity : AppCompatActivity() {
         // Первый пользователь в комнате создаёт offer
         if (remoteUserId.isEmpty()) {
             remoteUserId = newUserId
-            // Проверяем готовность локального видео
-            if (localVideoTrack != null) {
-                Log.d(TAG, "📹 Local video ready, creating offer for new user")
-                // Небольшая задержка чтобы убедиться что PeerConnection готов
-                Handler(Looper.getMainLooper()).postDelayed({
-                    createOffer()
-                }, 1000)
-            } else {
-                Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
-            }
+            Log.d(TAG, "📹 First user in room, creating offer...")
+            
+            // Создаем offer всегда, даже если видео не готово
+            Handler(Looper.getMainLooper()).postDelayed({
+                createOffer()
+            }, 1000)
         } else {
             Log.d(TAG, "📹 Already have remote user, ignoring new join")
         }
