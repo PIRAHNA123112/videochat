@@ -427,9 +427,22 @@ function handleSecureJoin(ws, data) {
     
     const room = rooms.get(roomId);
     
-    // Проверяем лимит участников
-    if (room.size >= 2) {
-        console.warn('Room is full:', roomId);
+    // Очищаем неактивные соединения из комнаты
+    const activeUsers = new Set();
+    room.forEach(userId => {
+        const client = clients.get(userId);
+        if (client && client.readyState === WebSocket.OPEN) {
+            activeUsers.add(userId);
+        } else {
+            console.log(`Removing inactive user ${userId} from room ${roomId}`);
+            room.delete(userId);
+            clients.delete(userId);
+        }
+    });
+    
+    // Проверяем лимит участников после очистки
+    if (activeUsers.size >= 2) {
+        console.warn('Room is full:', roomId, 'Active users:', activeUsers.size);
         ws.close(1003, 'Room is full');
         return;
     }
@@ -657,6 +670,31 @@ function handleDisconnect(ws) {
 // Отправить ЗАЩИЩЕННЫЙ список комнат одному клиенту
 function sendSecureRoomsList(ws) {
     try {
+        // Очищаем неактивных пользователей перед подсчетом
+        rooms.forEach((users, roomId) => {
+            const inactiveUsers = [];
+            users.forEach(userId => {
+                const client = clients.get(userId);
+                if (!client || client.readyState !== WebSocket.OPEN) {
+                    inactiveUsers.push(userId);
+                }
+            });
+            
+            // Удаляем неактивных пользователей
+            inactiveUsers.forEach(userId => {
+                users.delete(userId);
+                clients.delete(userId);
+                console.log(`Cleaned up inactive user ${userId} from room ${roomId}`);
+            });
+            
+            // Удаляем пустые комнаты
+            if (users.size === 0) {
+                rooms.delete(roomId);
+                roomKeys.delete(roomId);
+                console.log(`Removed empty room ${roomId}`);
+            }
+        });
+        
         // НЕ РАСКРЫВАЕМ КОНФИДЕНЦИАЛЬНУЮ ИНФОРМАЦИЮ
         const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
             id: id, // Полный ID комнаты для корректного входа
