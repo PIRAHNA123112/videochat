@@ -30,7 +30,39 @@ app.use((req, res, next) => {
 
 // Health check endpoint для мониторинга
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', rooms: Array.from(rooms.keys()) });
+    try {
+        const roomsList = Array.from(rooms.keys());
+        const clientsCount = wss.clients.size;
+        
+        console.log(`Health check: ${clientsCount} clients, ${roomsList.length} rooms`);
+        
+        res.json({ 
+            status: 'ok', 
+            rooms: roomsList,
+            clients: clientsCount,
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime()
+        });
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Root endpoint для проверки работы сервера
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Video Chat Signalling Server',
+        status: 'running',
+        endpoints: {
+            health: '/health',
+            websocket: 'WebSocket upgrade on same port'
+        }
+    });
 });
 
 // Хранилище для комнат
@@ -286,7 +318,34 @@ function broadcastRoomsList() {
 }
 
 const PORT = process.env.PORT || 3000;
+
+// Обработка ошибок сервера
+server.on('error', (error) => {
+    console.error('Server error:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+    }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Signalling сервер запущен на порту ${PORT}`);
     console.log(`Ожидание подключений...`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
