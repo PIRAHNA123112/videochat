@@ -929,9 +929,31 @@ class VideoCallActivity : AppCompatActivity() {
                 return
             }
             
-            val sdp = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
-            peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
-            createAnswer()
+            // Проверяем текущее состояние сигнализации
+            val signalingState = peerConnection?.signalingState()
+            Log.d(TAG, "Current signaling state: $signalingState")
+            
+            when (signalingState) {
+                PeerConnection.SignalingState.STABLE, 
+                PeerConnection.SignalingState.HAVE_LOCAL_OFFER -> {
+                    // Если у нас уже есть local offer, удаляем его
+                    if (signalingState == PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
+                        Log.d(TAG, "🔄 Rolling back local offer to handle incoming offer")
+                        // Создаем новое PeerConnection для чистого состояния
+                        recreatePeerConnection()
+                    }
+                    
+                    val sdp = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
+                    peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
+                    createAnswer()
+                }
+                PeerConnection.SignalingState.HAVE_REMOTE_OFFER -> {
+                    Log.d(TAG, "Already have remote offer, ignoring duplicate")
+                }
+                else -> {
+                    Log.w(TAG, "Unexpected signaling state: $signalingState")
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling offer: ${e.message}")
         }
@@ -1025,16 +1047,8 @@ class VideoCallActivity : AppCompatActivity() {
                 foundRemoteUser = true
                 Log.d(TAG, "👤 Found remote user: $remoteUserId")
                 
-                // Если мы нашли собеседника и локальное видео запущено, создаем offer
-                if (localVideoTrack != null) {
-                    Log.d(TAG, "📹 Local video ready, creating offer for remote user")
-                    // Небольшая задержка чтобы убедиться что PeerConnection готов
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        createOffer()
-                    }, 1000)
-                } else {
-                    Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
-                }
+                // НЕ создаем offer здесь - будем ждать offer от другого клиента
+                Log.d(TAG, "📹 Found remote user, waiting for their offer")
                 break
             }
         }
@@ -1061,6 +1075,8 @@ class VideoCallActivity : AppCompatActivity() {
             } else {
                 Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
             }
+        } else {
+            Log.d(TAG, "📹 Already have remote user, ignoring new join")
         }
     }
 
@@ -1118,6 +1134,28 @@ class VideoCallActivity : AppCompatActivity() {
             }
             override fun onSetFailure(s: String) {}
         }, constraints)
+    }
+
+    private fun recreatePeerConnection() {
+        Log.d(TAG, "🔄 Recreating PeerConnection for clean state")
+        
+        // Удаляем старое соединение
+        peerConnection?.close()
+        peerConnection = null
+        
+        // Создаем новое
+        createPeerConnection()
+        
+        // Добавляем локальные треки снова
+        localAudioTrack?.let { track ->
+            peerConnection?.addTrack(track, listOf("ARDAMS"))
+            Log.d(TAG, "Local audio track re-added to new peer connection: true")
+        }
+        
+        localVideoTrack?.let { track ->
+            peerConnection?.addTrack(track, listOf("ARDAMS"))
+            Log.d(TAG, "Local video track re-added to new peer connection: true")
+        }
     }
 
     private fun createAnswer() {
