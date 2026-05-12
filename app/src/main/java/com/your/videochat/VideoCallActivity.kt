@@ -86,7 +86,7 @@ class VideoCallActivity : AppCompatActivity() {
                 .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)     // Пинг каждые 30 сек
                 .addInterceptor { chain ->
                     val request = chain.request().newBuilder()
-                        .addHeader("Origin", "https://videochat-aend.onrender.com")
+                        // НЕ добавляем Origin header даже для эмулятора
                         .addHeader("User-Agent", "VideoChat-Android-Emulator/1.0")
                         .build()
                     chain.proceed(request)
@@ -668,7 +668,7 @@ class VideoCallActivity : AppCompatActivity() {
             .addHeader("Connection", "keep-alive")
             .addHeader("Cache-Control", "no-cache")
             .addHeader("Pragma", "no-cache")
-            .addHeader("Origin", "https://videochat-aend.onrender.com")
+            // НЕ добавляем Origin header для мобильных приложений
         
         // Дополнительные заголовки для эмулятора
         if (isEmulator) {

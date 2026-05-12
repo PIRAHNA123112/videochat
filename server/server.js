@@ -27,15 +27,26 @@ const wss = new WebSocket.Server({
     maxPayload: 1024 * 1024,  // 1MB лимит
     backlog: 100,  // Уменьшаем очередь для безопасности
     verifyClient: (info) => {
-        // Дополнительная верификация клиента
-        return info.origin === 'https://videochat-aend.onrender.com' || 
-               info.origin === 'http://localhost:3000' || 
-               info.origin === 'http://localhost:8080' || 
-               !info.origin;
+        // Упрощенная верификация для мобильных клиентов
+        // Разрешаем подключения с любых origins для мобильных приложений
+        // и проверяем только для веб-клиентов
+        const allowedOrigins = [
+            'https://videochat-aend.onrender.com',
+            'http://localhost:3000',
+            'http://localhost:8080'
+        ];
+        
+        // Если origin нет (мобильное приложение), разрешаем
+        if (!info.origin) {
+            return true;
+        }
+        
+        // Разрешаем для веб-клиентов
+        return allowedOrigins.includes(info.origin);
     }
 });
 
-// ЗАЩИЩЕННЫЙ CORS - только для ваших доменов
+// ЗАЩИЩЕННЫЙ CORS - разрешаем мобильные приложения
 app.use((req, res, next) => {
     const allowedOrigins = [
         'https://videochat-aend.onrender.com',
@@ -44,7 +55,8 @@ app.use((req, res, next) => {
     ];
     
     const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin) || !origin) {
+    // Разрешаем мобильные приложения (без origin) и разрешенные веб-домены
+    if (!origin || allowedOrigins.includes(origin)) {
         res.header('Access-Control-Allow-Origin', origin || '*');
     }
     
@@ -66,7 +78,8 @@ app.options('*', (req, res) => {
     ];
     
     const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin) || !origin) {
+    // Разрешаем мобильные приложения (без origin) и разрешенные веб-домены
+    if (!origin || allowedOrigins.includes(origin)) {
         res.header('Access-Control-Allow-Origin', origin || '*');
     }
     
