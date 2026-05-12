@@ -56,14 +56,43 @@ class VideoCallActivity : AppCompatActivity() {
     private lateinit var eglBase: EglBase
 
     private var webSocket: WebSocket? = null
-    // Оптимизированный HTTP клиент для максимальной скорости
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)  // Быстрое подключение
-        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)     // Быстрое чтение
-        .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)    // Быстрая запись
-        .retryOnConnectionFailure(true)                             // Автоповтор при ошибках
-        .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)    // Проверка соединения
-        .build()
+    
+    // Определяем, работаем ли на эмуляторе
+    private val isEmulator by lazy {
+        android.os.Build.FINGERPRINT.contains("vbox") || 
+        android.os.Build.FINGERPRINT.contains("generic") ||
+        android.os.Build.MODEL.contains("Emulator") ||
+        android.os.Build.MANUFACTURER.contains("Genymotion") ||
+        android.os.Build.BRAND.contains("google") && android.os.Build.MODEL.startsWith("sdk")
+    }
+    
+    // Оптимизированный HTTP клиент с учетом особенностей эмулятора
+    private val client by lazy {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true) // Повторные попытки при ошибках соединения
+            
+        // Специальные настройки для эмулятора
+        if (isEmulator) {
+            builder
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)  // Увеличенный таймаут
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)      // Увеличенный таймаут
+                .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)      // Увеличенный таймаут
+                .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)     // Пинг каждые 30 сек
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .addHeader("Origin", "https://videochat-aend.onrender.com")
+                        .addHeader("User-Agent", "VideoChat-Android-Emulator/1.0")
+                        .build()
+                    chain.proceed(request)
+                }
+        }
+        
+        builder.build()
+    }
+    
     private var userId: String = UUID.randomUUID().toString()
     private var roomId: String = ""
     private var remoteUserId: String = ""
@@ -433,11 +462,34 @@ class VideoCallActivity : AppCompatActivity() {
         }
         
         Log.d(TAG, "Connecting to signalling server: $SERVER_URL")
-        val request = Request.Builder()
+        
+        // Определяем, работаем ли на эмуляторе
+        val isEmulator = android.os.Build.FINGERPRINT.contains("vbox") || 
+                         android.os.Build.FINGERPRINT.contains("generic") ||
+                         android.os.Build.MODEL.contains("Emulator") ||
+                         android.os.Build.MANUFACTURER.contains("Genymotion") ||
+                         android.os.Build.BRAND.contains("google") && android.os.Build.MODEL.startsWith("sdk")
+        
+        Log.d(TAG, "Running on emulator: $isEmulator")
+        
+        val requestBuilder = Request.Builder()
             .url(SERVER_URL)
-            .addHeader("User-Agent", "VideoChat-Android/1.0")  // Идентификация клиента
-            .addHeader("Connection", "keep-alive")             // Поддержание соединения
-            .build()
+            .addHeader("User-Agent", "VideoChat-Android/1.0")
+            .addHeader("Connection", "keep-alive")
+            .addHeader("Cache-Control", "no-cache")
+            .addHeader("Pragma", "no-cache")
+            .addHeader("Origin", "https://videochat-aend.onrender.com")
+        
+        // Дополнительные заголовки для эмулятора
+        if (isEmulator) {
+            requestBuilder
+                .addHeader("Sec-WebSocket-Protocol", "chat")
+                .addHeader("Upgrade", "websocket")
+                .addHeader("Sec-WebSocket-Version", "13")
+                .timeout(30, java.util.concurrent.TimeUnit.SECONDS) // Увеличенный таймаут для эмулятора
+        }
+        
+        val request = requestBuilder.build()
 
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -469,6 +521,18 @@ class VideoCallActivity : AppCompatActivity() {
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure: ${t.message}")
+                Log.e(TAG, "Response code: ${response?.code}")
+                Log.e(TAG, "Response message: ${response?.message}")
+                Log.e(TAG, "Response headers: ${response?.headers}")
+                
+                // Дополнительная диагностика для эмулятора
+                if (android.os.Build.FINGERPRINT.contains("vbox") || 
+                    android.os.Build.FINGERPRINT.contains("generic")) {
+                    Log.e(TAG, "Emulator WebSocket issue - possible network restrictions")
+                    Log.e(TAG, "URL: $SERVER_URL")
+                    Log.e(TAG, "User-Agent: ${response?.request?.header("User-Agent")}")
+                }
+                
                 t.printStackTrace()
                 stopHeartbeat()
                 attemptReconnect()
@@ -510,21 +574,38 @@ class VideoCallActivity : AppCompatActivity() {
 
     // Автоматическое переподключение с экспоненциальной задержкой
     private fun attemptReconnect() {
-        if (reconnectAttempts >= maxReconnectAttempts) {
-            Log.e(TAG, "Max reconnect attempts reached")
+        val isEmulator = android.os.Build.FINGERPRINT.contains("vbox") || 
+                         android.os.Build.FINGERPRINT.contains("generic") ||
+                         android.os.Build.MODEL.contains("Emulator")
+        
+        val maxAttempts = if (isEmulator) 10 else maxReconnectAttempts // Больше попыток для эмулятора
+        
+        if (reconnectAttempts >= maxAttempts) {
+            Log.e(TAG, "Max reconnect attempts reached: $maxAttempts")
             runOnUiThread {
-                Toast.makeText(this, "Не удалось подключиться к серверу", Toast.LENGTH_LONG).show()
+                val errorMsg = if (isEmulator) {
+                    "Не удалось подключиться к серверу (эмулятор). Проверьте интернет и попробуйте снова."
+                } else {
+                    "Не удалось подключиться к серверу"
+                }
+                Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
             }
             return
         }
 
         reconnectAttempts++
-        val delay = (1000L * reconnectAttempts * reconnectAttempts).coerceAtMost(30000) // Экспоненциальная задержка до 30 сек
+        val baseDelay = if (isEmulator) 2000L else 1000L // Больше задержка для эмулятора
+        val maxDelay = if (isEmulator) 60000L else 30000L // До 60 сек для эмулятора
+        val delay = (baseDelay * reconnectAttempts * reconnectAttempts).coerceAtMost(maxDelay)
         
-        Log.d(TAG, "Attempting reconnect #$reconnectAttempts in ${delay}ms")
+        Log.d(TAG, "Attempting reconnect #$reconnectAttempts in ${delay}ms (emulator: $isEmulator)")
         
         heartbeatHandler.postDelayed({
             try {
+                // Закрываем старое соединение перед новым
+                webSocket?.close(1000, "Reconnecting")
+                webSocket = null
+                
                 connectToSignallingServer()
             } catch (e: Exception) {
                 Log.e(TAG, "Reconnect failed: ${e.message}")
