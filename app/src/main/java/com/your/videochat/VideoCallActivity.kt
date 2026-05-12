@@ -841,15 +841,23 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun startLocalVideo() {
-        Log.d(TAG, "Starting local video...")
+        Log.d(TAG, "📹 Starting local video...")
+        Log.d(TAG, "📹 PeerConnectionFactory: ${peerConnectionFactory != null}")
+        Log.d(TAG, "📹 PeerConnection: ${peerConnection != null}")
         
         if (peerConnectionFactory == null) {
-            Log.e(TAG, "PeerConnectionFactory is null when starting local video")
+            Log.e(TAG, "❌ PeerConnectionFactory is null when starting local video")
             return
         }
         
+        // Создаем PeerConnection если его нет
         if (peerConnection == null) {
-            Log.e(TAG, "PeerConnection is null when starting local video")
+            Log.d(TAG, "📹 Creating PeerConnection in startLocalVideo...")
+            createPeerConnection()
+        }
+        
+        if (peerConnection == null) {
+            Log.e(TAG, "❌ Failed to create PeerConnection")
             return
         }
         
@@ -990,12 +998,19 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun connectToSignallingServer() {
+        Log.d(TAG, "🔌 Starting connection to signalling server...")
+        Log.d(TAG, "🔌 Room ID: '$roomId'")
+        Log.d(TAG, "🔌 User ID: '$userId'")
+        Log.d(TAG, "🔌 Server URL: $SERVER_URL")
+        Log.d(TAG, "🔌 Network available: ${isNetworkAvailable()}")
+        Log.d(TAG, "🔌 Network quality: ${detectNetworkQuality()}")
+        
         if (roomId.isBlank()) {
-            Log.e(TAG, "Cannot connect: Room ID is empty")
+            Log.e(TAG, "❌ Cannot connect: Room ID is empty")
             return
         }
         
-        Log.d(TAG, "Connecting to signalling server: $SERVER_URL")
+        Log.d(TAG, "🔌 Connecting to signalling server: $SERVER_URL")
         
         // Определяем, работаем ли на эмуляторе
         val isEmulator = android.os.Build.FINGERPRINT.contains("vbox") || 
@@ -1032,9 +1047,9 @@ class VideoCallActivity : AppCompatActivity() {
                 Log.d(TAG, "🔌 Response message: ${response.message}")
                 reconnectAttempts = 0  // Сброс счетчика переподключений
                 
-nd                // Небольшая задержка для стабилизации соединения
+                // Небольшая задержка для стабилизации соединения
                 heartbeatHandler.postDelayed({
-                    if (!isFinishing && !isDestroyed && webSocket?.isOpen == true) {
+                    if (!isFinishing && !isDestroyed && webSocket != null) {
                         // Проверяем является ли пользователь создателем комнаты
                         val isCreator = intent.getBooleanExtra("isCreator", false)
                         
@@ -1144,32 +1159,26 @@ nd                // Небольшая задержка для стабилиз
                 }
                 
                 webSocket?.let { ws ->
-                    if (ws.isOpen) {
-                        try {
-                            // Адаптивный ping для мобильных сетей
-                            val networkQuality = detectNetworkQuality()
-                            val pingMessage = JSONObject().apply {
-                                put("type", "ping")
-                                put("timestamp", System.currentTimeMillis())
-                                put("networkQuality", networkQuality.name)
-                                put("batteryLevel", getBatteryLevel())
-                            }
-                            
-                            val success = ws.send(pingMessage.toString())
-                            if (success) {
-                                Log.d(TAG, "📡 Sent ping (network: ${networkQuality.name})")
-                            } else {
-                                Log.w(TAG, "❌ Failed to send ping")
-                                attemptReconnect()
-                                return@let
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "❌ WebSocket ping failed: ${e.message}")
+                    try {
+                        // Адаптивный ping для мобильных сетей
+                        val networkQuality = detectNetworkQuality()
+                        val pingMessage = JSONObject().apply {
+                            put("type", "ping")
+                            put("timestamp", System.currentTimeMillis())
+                            put("networkQuality", networkQuality.name)
+                            put("batteryLevel", getBatteryLevel())
+                        }
+                        
+                        val success = ws.send(pingMessage.toString())
+                        if (success) {
+                            Log.d(TAG, "📡 Sent ping (network: ${networkQuality.name})")
+                        } else {
+                            Log.w(TAG, "❌ Failed to send ping")
                             attemptReconnect()
                             return@let
                         }
-                    } else {
-                        Log.w(TAG, "WebSocket is closed, attempting reconnect")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "❌ WebSocket ping failed: ${e.message}")
                         attemptReconnect()
                         return@let
                     }
@@ -1471,7 +1480,6 @@ nd                // Небольшая задержка для стабилиз
         Log.d(TAG, "🔍 joinRoom() called")
         Log.d(TAG, "🔍 roomId: '$roomId'")
         Log.d(TAG, "🔍 webSocket: ${webSocket != null}")
-        Log.d(TAG, "🔍 webSocket.isOpen: ${webSocket?.isOpen}")
         Log.d(TAG, "🔍 userId: '$userId'")
         
         // Улучшенная валидация
@@ -1487,16 +1495,6 @@ nd                // Небольшая задержка для стабилиз
             Log.e(TAG, "❌ Cannot join room: websocket is null")
             runOnUiThread {
                 Toast.makeText(this, "Ошибка: нет соединения с сервером", Toast.LENGTH_LONG).show()
-            }
-            // Пробуем переподключиться
-            attemptReconnect()
-            return
-        }
-        
-        if (webSocket?.isOpen != true) {
-            Log.e(TAG, "❌ Cannot join room: websocket is not open")
-            runOnUiThread {
-                Toast.makeText(this, "Ошибка: соединение установлено", Toast.LENGTH_LONG).show()
             }
             // Пробуем переподключиться
             attemptReconnect()
@@ -2359,14 +2357,22 @@ nd                // Небольшая задержка для стабилиз
     }
 
     private fun requestPermissionsAndConnect() {
+        Log.d(TAG, "🔍 Checking permissions...")
+        permissions.forEach { permission ->
+            val granted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+            Log.d(TAG, "🔒 Permission $permission: ${if (granted) "GRANTED" else "DENIED"}")
+        }
+        
         val notGranted = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+        
         if (notGranted.isNotEmpty()) {
+            Log.w(TAG, "⚠️ Requesting permissions: ${notGranted.joinToString(", ")}")
             ActivityCompat.requestPermissions(this, notGranted.toTypedArray(), 100)
         } else {
             // Разрешения уже есть - запускаем сразу
-            Log.d(TAG, "Permissions already granted")
+            Log.d(TAG, "✅ All permissions already granted")
             startLocalVideo()
             connectToSignallingServer()
         }
@@ -2375,11 +2381,22 @@ nd                // Небольшая задержка для стабилиз
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 100) {
+            Log.d(TAG, "🔍 Permission request results:")
+            permissions.forEachIndexed { index, permission ->
+                val granted = grantResults[index] == PackageManager.PERMISSION_GRANTED
+                Log.d(TAG, "🔒 $permission: ${if (granted) "GRANTED" else "DENIED"}")
+            }
+            
             if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                Log.d(TAG, "✅ All permissions granted! Starting video and connecting...")
                 startLocalVideo()
                 connectToSignallingServer()
             } else {
-                Log.e(TAG, "Permissions not granted")
+                Log.e(TAG, "❌ Some permissions were denied")
+                runOnUiThread {
+                    Toast.makeText(this, "Требуются разрешения на камеру и микрофон", Toast.LENGTH_LONG).show()
+                    finish()
+                }
             }
         }
     }
