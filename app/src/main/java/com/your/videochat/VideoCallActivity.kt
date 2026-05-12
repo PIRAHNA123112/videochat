@@ -116,8 +116,7 @@ class VideoCallActivity : AppCompatActivity() {
         
         initViews()
         initializeWebRTC()
-        requestPermissions()
-        // Подключаемся к серверу после получения разрешений
+        requestPermissionsAndConnect()
     }
 
     private fun initViews() {
@@ -289,37 +288,62 @@ class VideoCallActivity : AppCompatActivity() {
             return
         }
         
-        val audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
+        if (peerConnection == null) {
+            Log.e(TAG, "PeerConnection is null when starting local video")
+            return
+        }
+        
+        // Создаем аудио источник с правильными ограничениями
+        val audioConstraints = MediaConstraints().apply {
+            // Включаем эхоподавление и шумоподавление
+            mandatory.add(MediaConstraints.KeyValuePair("googEchoCancellation", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googHighpassFilter", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl", "true"))
+        }
+        
+        val audioSource = peerConnectionFactory?.createAudioSource(audioConstraints)
         localAudioTrack = peerConnectionFactory?.createAudioTrack("audio", audioSource)
+        localAudioTrack?.setEnabled(true) // Включаем аудио сразу
 
         val surfaceTextureHelper = SurfaceTextureHelper.create("SurfaceTextureHelper", eglBase.eglBaseContext)
         cameraCapturer = createCameraCapturer()
         
         if (cameraCapturer != null) {
-            val videoSource = peerConnectionFactory?.createVideoSource(cameraCapturer!!.isScreencast)
+            val videoSource = peerConnectionFactory?.createVideoSource(false)
             cameraCapturer!!.initialize(surfaceTextureHelper, applicationContext, videoSource?.capturerObserver)
+            
             // Адаптивное качество видео в зависимости от устройства
             val optimalResolution = getOptimalVideoResolution()
             val optimalFps = getOptimalFps()
+            
+            Log.d(TAG, "Starting camera with resolution: ${optimalResolution.first}x${optimalResolution.second} @ ${optimalFps}fps")
             cameraCapturer!!.startCapture(optimalResolution.first, optimalResolution.second, optimalFps)
             
             localVideoTrack = peerConnectionFactory?.createVideoTrack("video", videoSource)
+            localVideoTrack?.setEnabled(true) // Включаем видео сразу
             localVideoTrack?.addSink(localVideoView)
 
-            // Используем addTrack вместо addStream (Unified Plan)
-            localVideoTrack?.let { 
-                val result = peerConnection?.addTrack(it, listOf("localStream"))
+            // Используем addTrack вместо addStream для UNIFIED_PLAN
+            localVideoTrack?.let { videoTrack ->
+                val result = peerConnection?.addTrack(videoTrack, listOf("localStream"))
                 Log.d(TAG, "Local video track added to peer connection: ${result != null}")
             }
-            localAudioTrack?.let { 
-                val result = peerConnection?.addTrack(it, listOf("localStream"))
-                it.setEnabled(true)  // Включаем локальный аудио трек
+            
+            localAudioTrack?.let { audioTrack ->
+                val result = peerConnection?.addTrack(audioTrack, listOf("localStream"))
                 Log.d(TAG, "Local audio track added to peer connection: ${result != null}")
-                Log.d(TAG, "Local audio track enabled: ${it.enabled()}")
-                Log.d(TAG, "Local audio track state: ${it.state()}")
-                Log.d(TAG, "Local audio track ready to send audio data")
+                Log.d(TAG, "Local audio track enabled: ${audioTrack.enabled()}")
+                Log.d(TAG, "Local audio track state: ${audioTrack.state()}")
             }
-            Log.d(TAG, "Local video started")
+            
+            Log.d(TAG, "Local video and audio started successfully")
+            
+            // После успешного запуска видео проверяем, нужно ли создать offer
+            if (remoteUserId.isNotEmpty()) {
+                Log.d(TAG, "Remote user found, creating offer after local video started")
+                createOffer()
+            }
         } else {
             Log.e(TAG, "Failed to create camera capturer")
         }
@@ -514,7 +538,7 @@ class VideoCallActivity : AppCompatActivity() {
         }
         
         // Добавляем пароль комнаты для защиты
-        val roomPassword = intent.getStringExtra("roomPassword") ?: ""
+        val roomPassword = intent.getStringExtra("roomPassword") ?: "1234"
         
         val message = JSONObject().apply {
             put("type", "join")
@@ -523,6 +547,7 @@ class VideoCallActivity : AppCompatActivity() {
             put("roomPassword", roomPassword)
         }
         Log.d(TAG, "Joining secure room: $message")
+        Log.d(TAG, "Room ID: $roomId, User ID: $userId, Password: $roomPassword")
         webSocket?.send(message.toString())
     }
 
@@ -537,8 +562,12 @@ class VideoCallActivity : AppCompatActivity() {
                 "answer" -> handleAnswer(json)
                 "ice-candidate" -> handleIceCandidate(json)
                 "user-joined" -> handleUserJoined(json)
+                "room-users" -> handleRoomUsers(json)
                 "user-left" -> {
                     remoteUserId = ""
+                    runOnUiThread {
+                        Toast.makeText(this, "Собеседник покинул комнату", Toast.LENGTH_SHORT).show()
+                    }
                     Log.d(TAG, "User left the room")
                 }
                 "chat-message" -> {
@@ -554,9 +583,18 @@ class VideoCallActivity : AppCompatActivity() {
                         Toast.makeText(this, "Ошибка сервера: $errorMsg", Toast.LENGTH_LONG).show()
                     }
                 }
+                "message" -> {
+                    // Обработка общих сообщений от сервера
+                    val msg = json.getString("message")
+                    Log.d(TAG, "Server message: $msg")
+                    runOnUiThread {
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling message: ${e.message}")
+            e.printStackTrace()
         }
     }
 
@@ -610,6 +648,27 @@ class VideoCallActivity : AppCompatActivity() {
         peerConnection?.addIceCandidate(candidate)
     }
 
+    private fun handleRoomUsers(json: JSONObject) {
+        val users = json.getJSONArray("users")
+        Log.d(TAG, "Room users received: $users")
+        
+        // Ищем других пользователей в комнате (кроме себя)
+        for (i in 0 until users.length()) {
+            val userId = users.getString(i)
+            if (userId != this.userId) {
+                remoteUserId = userId
+                Log.d(TAG, "Found remote user: $remoteUserId")
+                // Если мы нашли собеседника и локальное видео запущено, создаем offer
+                if (localVideoTrack != null) {
+                    createOffer()
+                } else {
+                    Log.d(TAG, "Local video not ready yet, will create offer when ready")
+                }
+                break
+            }
+        }
+    }
+
     private fun handleUserJoined(json: JSONObject) {
         val newUserId = json.getString("userId")
         Log.d(TAG, "User joined: $newUserId")
@@ -617,7 +676,12 @@ class VideoCallActivity : AppCompatActivity() {
         // Первый пользователь в комнате создаёт offer
         if (remoteUserId.isEmpty()) {
             remoteUserId = newUserId
-            createOffer()
+            // Проверяем готовность локального видео
+            if (localVideoTrack != null) {
+                createOffer()
+            } else {
+                Log.d(TAG, "Local video not ready yet, will create offer when ready")
+            }
         }
     }
 
@@ -942,7 +1006,7 @@ class VideoCallActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun requestPermissions() {
+    private fun requestPermissionsAndConnect() {
         val notGranted = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }

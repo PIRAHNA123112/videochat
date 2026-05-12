@@ -7,6 +7,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
+import org.json.JSONObject
 
 /**
  * Утилиты для шифрования сигнальных сообщений
@@ -41,11 +42,15 @@ class CryptoUtils {
                 val parameterSpec = GCMParameterSpec(GCM_TAG_LENGTH * 8, iv)
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec)
                 
-                val encryptedData = cipher.doFinal(message.toByteArray(Charsets.UTF_8))
-                val authTag = cipher.getTag()
+                val messageBytes = message.toByteArray(Charsets.UTF_8)
+                val encryptedData = cipher.doFinal(messageBytes)
+                
+                // В AES-GCM тег аутентификации находится в конце зашифрованных данных
+                val ciphertext = encryptedData.copyOfRange(0, encryptedData.size - GCM_TAG_LENGTH)
+                val authTag = encryptedData.copyOfRange(encryptedData.size - GCM_TAG_LENGTH, encryptedData.size)
                 
                 EncryptedMessage(
-                    encryptedData = Base64.encodeToString(encryptedData, Base64.NO_WRAP),
+                    encryptedData = Base64.encodeToString(ciphertext, Base64.NO_WRAP),
                     iv = Base64.encodeToString(iv, Base64.NO_WRAP),
                     authTag = Base64.encodeToString(authTag, Base64.NO_WRAP)
                 )

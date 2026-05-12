@@ -1,7 +1,11 @@
 package com.your.videochat
 
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -67,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         createRoomButton.setOnClickListener {
             val roomName = roomNameInput.text.toString().trim()
             if (roomName.isNotEmpty()) {
-                joinRoom(roomName)
+                createRoom(roomName)
             } else {
                 Toast.makeText(this, "Введите название комнаты", Toast.LENGTH_SHORT).show()
             }
@@ -85,6 +89,13 @@ class MainActivity : AppCompatActivity() {
         connectToServer()
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+
     private fun connectToServer() {
         val url = serverUrlInput.text.toString().trim()
         if (url.isEmpty()) {
@@ -93,6 +104,20 @@ class MainActivity : AppCompatActivity() {
                 connectionStatus.setTextColor(resources.getColor(R.color.status_error, null))
                 loadingIndicator.visibility = View.GONE
             }
+            return
+        }
+
+        if (!isNetworkAvailable()) {
+            runOnUiThread {
+                connectionStatus.text = "Нет подключения к интернету"
+                connectionStatus.setTextColor(resources.getColor(R.color.status_error, null))
+                loadingIndicator.visibility = View.GONE
+                Toast.makeText(this@MainActivity, "Проверьте подключение к интернету", Toast.LENGTH_LONG).show()
+            }
+            // Попробуем переподключиться через 5 секунд
+            Handler(Looper.getMainLooper()).postDelayed({
+                connectToServer()
+            }, 5000)
             return
         }
 
@@ -117,6 +142,8 @@ class MainActivity : AppCompatActivity() {
                     statusDot.setBackgroundResource(R.drawable.circle_button_modern)
                     Log.d(TAG, "WebSocket connected")
                 }
+                // Запрашиваем список комнат сразу после подключения
+                webSocket.send("{\"type\":\"get-rooms\"}")
                 // Запускаем heartbeat
                 startHeartbeat()
             }
@@ -131,29 +158,56 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
 
-                    if (type == "rooms-list") {
-                        val roomsArray = json.getJSONArray("rooms")
-                        val newRooms = mutableListOf<Room>()
-                        
-                        for (i in 0 until roomsArray.length()) {
-                            val roomJson = roomsArray.getJSONObject(i)
-                            newRooms.add(Room(
-                                roomJson.getString("id"),
-                                roomJson.getInt("usersCount")
-                            ))
-                        }
-
-                        runOnUiThread {
-                            rooms.clear()
-                            rooms.addAll(newRooms)
-                            roomsAdapter.notifyDataSetChanged()
+                    when (type) {
+                        "rooms-list" -> {
+                            val roomsArray = json.getJSONArray("rooms")
+                            val newRooms = mutableListOf<Room>()
                             
-                            if (rooms.isEmpty()) {
-                                roomsRecyclerView.visibility = View.GONE
-                                emptyRoomsText.visibility = View.VISIBLE
-                            } else {
-                                roomsRecyclerView.visibility = View.VISIBLE
-                                emptyRoomsText.visibility = View.GONE
+                            for (i in 0 until roomsArray.length()) {
+                                val roomJson = roomsArray.getJSONObject(i)
+                                newRooms.add(Room(
+                                    roomJson.getString("id"),
+                                    roomJson.getInt("usersCount")
+                                ))
+                            }
+
+                            runOnUiThread {
+                                rooms.clear()
+                                rooms.addAll(newRooms)
+                                roomsAdapter.notifyDataSetChanged()
+                                
+                                if (rooms.isEmpty()) {
+                                    roomsRecyclerView.visibility = View.GONE
+                                    emptyRoomsText.visibility = View.VISIBLE
+                                } else {
+                                    roomsRecyclerView.visibility = View.VISIBLE
+                                    emptyRoomsText.visibility = View.GONE
+                                }
+                            }
+                        }
+                        "room-created" -> {
+                            val roomId = json.getString("roomId")
+                            val roomName = json.getString("roomName")
+                            
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Комната '$roomName' создана!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                roomNameInput.text.clear()
+                                // Автоматически обновляем список комнат
+                                webSocket?.send("{\"type\":\"get-rooms\"}")
+                            }
+                        }
+                        "error" -> {
+                            val errorMessage = json.getString("message")
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Ошибка: $errorMessage",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     }
@@ -163,15 +217,41 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.e(TAG, "WebSocket failure: ${t.message}", t)
+                Log.e(TAG, "Response code: ${response?.code}")
+                Log.e(TAG, "Response message: ${response?.message}")
+                Log.e(TAG, "Server URL: $SERVER_URL")
+                
                 runOnUiThread {
-                    connectionStatus.text = "Ошибка подключения: ${t.message}"
+                    val errorMessage = when {
+                        t.message?.contains("SSL") == true -> "SSL ошибка - проверьте URL сервера"
+                        t.message?.contains("Unknown host") == true -> "Сервер не найден - проверьте интернет"
+                        t.message?.contains("Connection refused") == true -> "Сервер недоступен"
+                        response?.code == 404 -> "Неверный путь WebSocket"
+                        else -> "Ошибка подключения: ${t.message ?: "неизвестная ошибка"}"
+                    }
+                    connectionStatus.text = "$errorMessage. Переподключение..."
                     connectionStatus.setTextColor(resources.getColor(R.color.status_error, null))
-                    loadingIndicator.visibility = View.GONE
+                    loadingIndicator.visibility = View.VISIBLE
                     statusDot.visibility = View.VISIBLE
                     statusDot.setBackgroundResource(R.drawable.button_danger)
-                    Log.e(TAG, "WebSocket failure: ${t.message}")
                 }
                 stopHeartbeat()
+                
+                // Автоматическое переподключение через 3 секунды
+                Handler(Looper.getMainLooper()).postDelayed({
+                    if (isNetworkAvailable()) {
+                        Log.d(TAG, "Attempting to reconnect...")
+                        connectToServer()
+                    } else {
+                        runOnUiThread {
+                            connectionStatus.text = "Нет интернета. Ожидание..."
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                connectToServer()
+                            }, 5000)
+                        }
+                    }
+                }, 3000)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -221,6 +301,33 @@ class MainActivity : AppCompatActivity() {
         roomsUpdateRunnable = null
     }
 
+    private fun createRoom(roomName: String) {
+        if (roomName.isBlank()) {
+            Toast.makeText(this, "Название комнаты не может быть пустым", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (roomName.length < 3) {
+            Toast.makeText(this, "Название комнаты должно быть не менее 3 символов", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // Генерируем простой пароль для комнаты
+        val roomPassword = "1234" // В реальном приложении нужно спросить у пользователя
+        
+        webSocket?.let { ws ->
+            val createRoomJson = JSONObject().apply {
+                put("type", "create-room")
+                put("roomName", roomName)
+                put("roomPassword", roomPassword)
+            }
+            ws.send(createRoomJson.toString())
+            Log.d(TAG, "Creating room: $roomName")
+        } ?: run {
+            Toast.makeText(this, "Нет подключения к серверу", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun joinRoom(roomId: String) {
         if (roomId.isBlank()) {
             Toast.makeText(this, "Название комнаты не может быть пустым", Toast.LENGTH_SHORT).show()
@@ -235,6 +342,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, VideoCallActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("serverUrl", SERVER_URL)
+        intent.putExtra("roomPassword", "1234") // В реальном приложении нужно спросить у пользователя
         startActivity(intent)
     }
 

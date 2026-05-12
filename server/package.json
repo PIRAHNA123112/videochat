@@ -2,9 +2,9 @@
   "name": "secure-videochat-server",
   "version": "2.0.0",
   "description": "Secure signalling server for WebRTC video calls",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

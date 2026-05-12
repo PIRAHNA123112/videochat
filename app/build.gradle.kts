@@ -60,6 +60,9 @@ dependencies {
     // OkHttp для WebSocket соединения с signalling сервером
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     
+    // Security crypto для шифрования сигнальных сообщений
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
