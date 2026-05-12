@@ -372,6 +372,7 @@ class RoomsAdapter(
 
     override fun onBindViewHolder(holder: RoomViewHolder, position: Int) {
         val room = rooms[position]
+        // Показываем полный ID комнаты без обрезания
         holder.roomNameText.text = room.id
         val usersText = if (room.usersCount == 1) "1 участник" else "${room.usersCount} участников"
         holder.usersCountText.text = usersText
