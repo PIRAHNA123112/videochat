@@ -11,11 +11,11 @@ const wss = new WebSocket.Server({ server });
 // Middleware для JSON
 app.use(express.json());
 
-// CORS
+// CORS с поддержкой WebSocket
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, WebSocket-Protocol, Sec-WebSocket-Key, Sec-WebSocket-Version, Sec-WebSocket-Protocol');
     next();
 });
 
@@ -34,8 +34,10 @@ const rooms = new Map();
 const clients = new Map();
 
 // WebSocket подключение
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection');
+wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection from:', req.url);
+    console.log('Headers:', req.headers);
+    console.log('Remote address:', req.socket.remoteAddress);
     
     // Устанавливаем флаг для heartbeat
     ws.isAlive = true;
@@ -43,6 +45,25 @@ wss.on('connection', (ws) => {
     // Обработка ping/pong
     ws.on('pong', () => {
         ws.isAlive = true;
+        console.log('Received pong from client');
+    });
+    
+    // Обработка ошибок
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+    
+    // Обработка отключения
+    ws.on('close', (code, reason) => {
+        console.log(`WebSocket closed: ${code} - ${reason}`);
+        // Удаляем из всех комнат
+        for (const [roomId, users] of rooms.entries()) {
+            users.delete(ws.userId);
+            if (users.size === 0) {
+                rooms.delete(roomId);
+            }
+        }
+        clients.delete(ws.userId);
     });
     
     ws.on('message', (message) => {
