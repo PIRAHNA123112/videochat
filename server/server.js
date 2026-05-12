@@ -454,10 +454,13 @@ function handleSecureJoin(ws, data) {
 
 function handleSecureOffer(ws, data) {
     const { roomId, targetUserId, offer } = data;
+    console.log(`Offer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for offer');
+        console.warn('Target client not available for offer:', targetUserId);
+        console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
     
@@ -484,10 +487,13 @@ function handleSecureOffer(ws, data) {
 
 function handleSecureAnswer(ws, data) {
     const { roomId, targetUserId, answer } = data;
+    console.log(`Answer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for answer');
+        console.warn('Target client not available for answer:', targetUserId);
+        console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
     
@@ -514,10 +520,13 @@ function handleSecureAnswer(ws, data) {
 
 function handleSecureIceCandidate(ws, data) {
     const { roomId, targetUserId, candidate, sdpMid, sdpMLineIndex } = data;
+    console.log(`ICE candidate from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for ICE candidate');
+        console.warn('Target client not available for ICE candidate:', targetUserId);
+        console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
     
