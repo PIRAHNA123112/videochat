@@ -428,6 +428,8 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun createPeerConnection() {
         Log.d(TAG, "Creating PeerConnection...")
+        Log.d(TAG, "PeerConnectionFactory is null: ${peerConnectionFactory == null}")
+        Log.d(TAG, "Current peerConnection: $peerConnection")
         
         if (peerConnectionFactory == null) {
             Log.e(TAG, "PeerConnectionFactory is null")
@@ -468,6 +470,7 @@ class VideoCallActivity : AppCompatActivity() {
         // Все настройки применены выше
         
         try {
+            Log.d(TAG, "🔧 Creating PeerConnection with config...")
             peerConnection = peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate) {
                 Log.d(TAG, "ICE Candidate: ${candidate.sdp}")
@@ -606,8 +609,10 @@ class VideoCallActivity : AppCompatActivity() {
         })
         Log.d(TAG, "PeerConnection created")
         } catch (e: Exception) {
-            Log.e(TAG, "Критическая ошибка создания PeerConnection: ${e.message}")
-            Log.e(TAG, "Тип ошибки: ${e.javaClass.simpleName}")
+            Log.e(TAG, "❌ CRITICAL ERROR: PeerConnection creation failed!")
+            Log.e(TAG, "❌ Error message: ${e.message}")
+            Log.e(TAG, "❌ Error type: ${e.javaClass.simpleName}")
+            Log.e(TAG, "❌ Stack trace: ${e.stackTraceToString()}")
             
             // Пробуем создать с базовыми настройками если ошибка
             try {
