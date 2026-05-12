@@ -340,6 +340,7 @@ class MainActivity : AppCompatActivity() {
         }
         
         val intent = Intent(this, VideoCallActivity::class.java)
+        Log.d(TAG, "Passing roomId to VideoCallActivity: $roomId")
         intent.putExtra("roomId", roomId)
         intent.putExtra("serverUrl", SERVER_URL)
         intent.putExtra("roomPassword", "1234") // В реальном приложении нужно спросить у пользователя

@@ -95,6 +95,7 @@ class VideoCallActivity : AppCompatActivity() {
         setContentView(R.layout.activity_video_call)
 
         roomId = intent.getStringExtra("roomId") ?: ""
+        Log.d(TAG, "Received roomId from intent: $roomId")
         
         if (roomId.isBlank()) {
             Log.e(TAG, "Room ID is null or empty")
@@ -201,6 +202,7 @@ class VideoCallActivity : AppCompatActivity() {
         peerConnection = peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate) {
                 Log.d(TAG, "ICE Candidate: ${candidate.sdp}")
+                Log.d(TAG, "ICE Candidate - sdpMid: ${candidate.sdpMid}, sdpMLineIndex: ${candidate.sdpMLineIndex}")
                 sendIceCandidate(candidate)
             }
 
