@@ -770,9 +770,11 @@ class VideoCallActivity : AppCompatActivity() {
                 val currentRemoteUserId = remoteUserId
                 
                 // Закрываем старое соединение
-                peerConnection?.close()
-                Log.w(TAG, "⚠️ PeerConnection set to null in reconnectWebSocket()")
-                peerConnection = null
+                synchronized(this) {
+                    peerConnection?.close()
+                    Log.w(TAG, "⚠️ PeerConnection set to null in reconnectWebSocket()")
+                    peerConnection = null
+                }
                 
                 // Сбрасываем счетчик ICE проверок
                 iceCheckCount = 0
@@ -859,13 +861,17 @@ class VideoCallActivity : AppCompatActivity() {
         // Если PeerConnection null, создаем его заново
         if (peerConnection == null) {
             Log.w(TAG, "⚠️ PeerConnection is null, recreating...")
-            createPeerConnection()
             
-            if (peerConnection == null) {
-                Log.e(TAG, "❌ Failed to recreate PeerConnection")
-                return
+            // Блокируем любые другие операции с PeerConnection
+            synchronized(this) {
+                createPeerConnection()
+                
+                if (peerConnection == null) {
+                    Log.e(TAG, "❌ Failed to recreate PeerConnection")
+                    return
+                }
+                Log.d(TAG, "✅ PeerConnection recreated successfully")
             }
-            Log.d(TAG, "✅ PeerConnection recreated successfully")
         }
         
         // Создаем аудио источник с правильными ограничениями
@@ -1904,9 +1910,11 @@ class VideoCallActivity : AppCompatActivity() {
         Log.d(TAG, "🔄 Recreating PeerConnection for clean state")
         
         // Удаляем старое соединение
-        peerConnection?.close()
-        Log.w(TAG, "⚠️ PeerConnection set to null in recreatePeerConnection()")
-        peerConnection = null
+        synchronized(this) {
+            peerConnection?.close()
+            Log.w(TAG, "⚠️ PeerConnection set to null in recreatePeerConnection()")
+            peerConnection = null
+        }
         
         // Создаем новое
         createPeerConnection()
@@ -2424,9 +2432,11 @@ class VideoCallActivity : AppCompatActivity() {
         }
         
         try {
-            peerConnection?.close()
-            Log.w(TAG, "⚠️ PeerConnection set to null in onDestroy()")
-            peerConnection = null
+            synchronized(this) {
+                peerConnection?.close()
+                Log.w(TAG, "⚠️ PeerConnection set to null in onDestroy()")
+                peerConnection = null
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error closing PeerConnection: ${e.message}")
         }
