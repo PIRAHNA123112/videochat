@@ -5,18 +5,20 @@
     android:layout_height="match_parent"
     android:background="@color/black">
 
-    <!-- Remote Video (Full Screen) -->
+    <!-- Remote Video (Optimized Full Screen) -->
     <org.webrtc.SurfaceViewRenderer
         android:id="@+id/remoteVideoView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="visible" />
 
-    <!-- Gradient Overlay -->
+    <!-- Lightweight Gradient Overlay -->
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/gradient_background"
-        android:alpha="0.15" />
+        android:alpha="0.08" />  <!-- Уменьшаем прозрачность для производительности -->
 
     <!-- Top Bar -->
     <LinearLayout
@@ -53,20 +55,22 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Local Video (Small Window) -->
+    <!-- Local Video (Optimized Small Window) -->
     <androidx.cardview.widget.CardView
-        android:layout_width="140dp"
-        android:layout_height="200dp"
+        android:layout_width="120dp"
+        android:layout_height="160dp"
         android:layout_gravity="top|end"
-        android:layout_margin="16dp"
+        android:layout_margin="12dp"
         app:cardBackgroundColor="@color/background_card"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp">
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp">
 
         <org.webrtc.SurfaceViewRenderer
             android:id="@+id/localVideoView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:visibility="visible" />
     </androidx.cardview.widget.CardView>
 
     <!-- Control Panel -->
@@ -76,14 +80,14 @@
         android:layout_gravity="bottom"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="24dp">
+        android:padding="12dp">  <!-- Уменьшаем отступы для компактности -->
 
         <!-- Mic Button -->
         <ImageButton
             android:id="@+id/micButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="16dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="12dp"
             android:background="@drawable/circle_button_modern"
             android:src="@drawable/ic_mic"
             android:scaleType="center"
@@ -92,9 +96,9 @@
         <!-- Camera Button -->
         <ImageButton
             android:id="@+id/cameraButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="16dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="12dp"
             android:background="@drawable/circle_button_modern"
             android:src="@drawable/ic_videocam"
             android:scaleType="center"
@@ -103,19 +107,30 @@
         <!-- Chat Button -->
         <ImageButton
             android:id="@+id/chatButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="16dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="12dp"
             android:background="@drawable/circle_button_modern"
             android:src="@drawable/ic_chat"
             android:scaleType="center"
             android:contentDescription="Chat" />
 
+        <!-- Camera Switch Button -->
+        <ImageButton
+            android:id="@+id/cameraSwitchButton"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/circle_button_modern"
+            android:src="@drawable/ic_camera_switch"
+            android:scaleType="center"
+            android:contentDescription="Switch Camera" />
+
         <!-- End Call Button -->
         <ImageButton
             android:id="@+id/endCallButton"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:background="@drawable/button_danger"
             android:src="@drawable/ic_call_end"
             android:scaleType="center"

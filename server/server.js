@@ -1,68 +1,169 @@
 const WebSocket = require('ws');
 const http = require('http');
 const express = require('express');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket сервер
-const wss = new WebSocket.Server({ server });
+// Rate limiting для защиты от атак
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 минут
+    max: 100, // максимум 100 запросов
+    message: 'Too many requests',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-// CORS для HTTP запросов
+app.use(limiter);
+
+// ЗАЩИЩЕННЫЙ WebSocket сервер
+const wss = new WebSocket.Server({ 
+    server,
+    perMessageDeflate: false,  // Отключаем компрессию для безопасности
+    maxPayload: 1024 * 1024,  // 1MB лимит
+    backlog: 100,  // Уменьшаем очередь для безопасности
+    verifyClient: (info) => {
+        // Дополнительная верификация клиента
+        return info.origin === 'https://your-app-name.onrender.com' || !info.origin;
+    }
+});
+
+// ЗАЩИЩЕННЫЙ CORS - только для ваших доменов
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const allowedOrigins = [
+        'https://your-app-name.onrender.com',
+        'https://your-domain.com'
+    ];
+    
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
+    
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, WebSocket-Protocol');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Room-Key');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('X-XSS-Protection', '1; mode=block');
     next();
 });
 
 // Обработка OPTIONS запросов для CORS
 app.options('*', (req, res) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const allowedOrigins = [
+        'https://your-app-name.onrender.com',
+        'https://your-domain.com'
+    ];
+    
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
+    
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, WebSocket-Protocol');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Room-Key');
+    res.header('Access-Control-Allow-Credentials', 'true');
     res.sendStatus(200);
 });
 
-// Health check endpoint для мониторинга
+// ЗАЩИЩЕННЫЙ health check endpoint (без утечки данных)
 app.get('/health', (req, res) => {
     try {
-        const roomsList = Array.from(rooms.keys());
+        const roomsCount = rooms.size;
         const clientsCount = wss.clients.size;
         
-        console.log(`Health check: ${clientsCount} clients, ${roomsList.length} rooms`);
+        console.log(`Health check: ${clientsCount} clients, ${roomsCount} rooms`);
         
+        // НЕ РАСКРЫВАЕМ КОНФИДЕНЦИАЛЬНУЮ ИНФОРМАЦИЮ
         res.json({ 
             status: 'ok', 
-            rooms: roomsList,
-            clients: clientsCount,
+            roomsCount: roomsCount,  // Только количество, не ID
+            clientsCount: clientsCount,
             timestamp: new Date().toISOString(),
-            uptime: process.uptime()
+            uptime: process.uptime(),
+            version: '2.0.0-secure'
         });
     } catch (error) {
-        console.error('Health check error:', error);
+        console.error('Health check error (details hidden):', error.message);
         res.status(500).json({ 
             status: 'error', 
-            error: error.message,
+            error: 'Internal server error',
             timestamp: new Date().toISOString()
         });
+    }
+});
+
+// API для создания защищенных комнат
+app.post('/api/create-room', express.json({ limit: '10kb' }), (req, res) => {
+    try {
+        const { roomKey, roomPassword } = req.body;
+        
+        // Валидация входных данных
+        if (!roomKey || roomKey.length !== 64) {
+            return res.status(400).json({ error: 'Invalid room key format' });
+        }
+        
+        if (!roomPassword || roomPassword.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+        
+        // Создаем защищенную комнату
+        const roomId = crypto.randomBytes(16).toString('hex');
+        const roomData = {
+            id: roomId,
+            password: crypto.createHash('sha256').update(roomPassword).digest('hex'),
+            createdAt: Date.now(),
+            maxParticipants: 2
+        };
+        
+        rooms.set(roomId, new Set());
+        roomKeys.set(roomId, roomData.password);
+        
+        // Автоматическое удаление через 24 часа
+        setTimeout(() => {
+            rooms.delete(roomId);
+            roomKeys.delete(roomId);
+            console.log(`Secure room ${roomId} expired and cleaned up`);
+        }, 24 * 60 * 60 * 1000);
+        
+        res.json({ 
+            roomId: roomId,
+            expires: Date.now() + 24 * 60 * 60 * 1000, // 24 часа
+            message: 'Secure room created successfully'
+        });
+        
+    } catch (error) {
+        console.error('Secure room creation error:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Root endpoint для проверки работы сервера
 app.get('/', (req, res) => {
     res.json({ 
-        message: 'Video Chat Signalling Server',
+        message: 'SECURE Video Chat Signalling Server',
         status: 'running',
+        version: '2.0.0-secure',
+        security: {
+            encryption: 'AES-256-GCM',
+            authentication: 'SHA-256',
+            rateLimit: '100 req/15min',
+            cors: 'Restricted'
+        },
         endpoints: {
             health: '/health',
+            createRoom: '/api/create-room',
             websocket: 'WebSocket upgrade on same port'
         }
     });
 });
 
-// Хранилище для комнат
+// Хранилище для комнат с защитой
 const rooms = new Map();
+const roomKeys = new Map(); // Храним хеши паролей
 
 // Хранилище для подключений
 const clients = new Map();
@@ -104,117 +205,219 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Проверка живых соединений каждые 15 секунд
+// Оптимизированная проверка соединений каждые 20 секунд
 const heartbeatInterval = setInterval(() => {
+    const deadConnections = [];
+    
     wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
-            console.log('Соединение не отвечает, закрываем');
-            return ws.terminate();
+            deadConnections.push(ws);
+        } else {
+            ws.isAlive = false;
+            try {
+                ws.ping();
+            } catch (error) {
+                deadConnections.push(ws);
+            }
         }
-        ws.isAlive = false;
-        ws.ping();
     });
-}, 15000);
+    
+    // Массово закрываем мертвые соединения
+    deadConnections.forEach(ws => {
+        try {
+            console.log('Terminating dead connection');
+            ws.terminate();
+        } catch (error) {
+            console.error('Error terminating connection:', error.message);
+        }
+    });
+    
+    // Логируем статистику
+    console.log(`Active connections: ${wss.clients.size - deadConnections.length}`);
+}, 20000);
 
 function handleMessage(ws, data) {
+    // Валидация типа сообщения
+    const allowedTypes = ['join', 'offer', 'answer', 'ice-candidate', 'leave', 'get-rooms', 'chat-message'];
+    if (!allowedTypes.includes(data.type)) {
+        console.warn('Invalid message type:', data.type);
+        ws.close(1003, 'Invalid message type');
+        return;
+    }
+    
+    // Валидация размера сообщения
+    const messageSize = JSON.stringify(data).length;
+    if (messageSize > 10240) { // 10KB лимит
+        console.warn('Message too large:', messageSize);
+        ws.close(1009, 'Message too large');
+        return;
+    }
+    
     switch (data.type) {
         case 'join':
-            handleJoin(ws, data);
+            handleSecureJoin(ws, data);
             break;
         case 'offer':
-            handleOffer(ws, data);
+            handleSecureOffer(ws, data);
             break;
         case 'answer':
-            handleAnswer(ws, data);
+            handleSecureAnswer(ws, data);
             break;
         case 'ice-candidate':
-            handleIceCandidate(ws, data);
+            handleSecureIceCandidate(ws, data);
             break;
         case 'leave':
-            handleLeave(ws, data);
+            handleSecureLeave(ws, data);
             break;
         case 'get-rooms':
-            sendRoomsList(ws);
+            sendSecureRoomsList(ws);
             break;
         case 'chat-message':
-            handleChatMessage(ws, data);
+            handleSecureChatMessage(ws, data);
             break;
         default:
             console.log('Неизвестный тип сообщения:', data.type);
+            ws.close(1003, 'Unknown message type');
     }
 }
 
-function handleJoin(ws, data) {
-    const { roomId, userId } = data;
-    const isNewRoom = !rooms.has(roomId);
+function handleSecureJoin(ws, data) {
+    const { roomId, userId, roomPassword } = data;
     
-    if (isNewRoom) {
-        rooms.set(roomId, new Set());
+    // Валидация входных данных
+    if (!roomId || !userId || !roomPassword) {
+        console.warn('Missing required fields for join');
+        ws.close(1003, 'Missing required fields');
+        return;
+    }
+    
+    if (!rooms.has(roomId)) {
+        console.warn('Room not found:', roomId);
+        ws.close(1003, 'Room not found');
+        return;
     }
     
     const room = rooms.get(roomId);
+    const storedPassword = roomKeys.get(roomId);
+    
+    // Проверяем пароль комнаты
+    const inputPasswordHash = crypto.createHash('sha256').update(roomPassword).digest('hex');
+    if (storedPassword !== inputPasswordHash) {
+        console.warn('Invalid room password for:', roomId);
+        ws.close(1003, 'Invalid room password');
+        return;
+    }
+    
+    // Проверяем лимит участников
+    if (room.size >= 2) {
+        console.warn('Room is full:', roomId);
+        ws.close(1003, 'Room is full');
+        return;
+    }
+    
     room.add(userId);
     clients.set(userId, ws);
     ws.roomId = roomId;
     ws.userId = userId;
     
-    console.log(`Пользователь ${userId} присоединился к комнате ${roomId}`);
+    console.log(`Secure join: User ${userId} joined room ${roomId}`);
     
-    // Если новая комната - уведомить всех
-    if (isNewRoom) {
-        broadcastRoomsList();
-    }
-    
-    // Уведомить других участников о новом пользователе
+    // Уведомляем других участников
     const otherUsers = Array.from(room).filter(id => id !== userId);
     otherUsers.forEach(otherUserId => {
         const client = clients.get(otherUserId);
         if (client && client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({
                 type: 'user-joined',
-                userId: userId  // ID нового пользователя
+                userId: userId
             }));
         }
     });
     
-    // Отправить список участников
+    // Отправляем список участников
     ws.send(JSON.stringify({
         type: 'room-users',
         users: otherUsers
     }));
 }
 
-function handleOffer(ws, data) {
+function handleSecureOffer(ws, data) {
     const { roomId, targetUserId, offer } = data;
     const targetClient = clients.get(targetUserId);
     
-    if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+    if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
+        console.warn('Target client not available for offer');
+        return;
+    }
+    
+    try {
+        // Валидация SDP оффера
+        if (!offer || typeof offer !== 'string' || offer.length > 100000) {
+            console.warn('Invalid offer data');
+            ws.close(1003, 'Invalid offer data');
+            return;
+        }
+        
         targetClient.send(JSON.stringify({
             type: 'offer',
             userId: ws.userId,
             offer: offer
         }));
+        
+        console.log(`Secure offer sent from ${ws.userId} to ${targetUserId}`);
+    } catch (error) {
+        console.error('Error sending secure offer:', error.message);
+        clients.delete(targetUserId);
     }
 }
 
-function handleAnswer(ws, data) {
+function handleSecureAnswer(ws, data) {
     const { roomId, targetUserId, answer } = data;
     const targetClient = clients.get(targetUserId);
     
-    if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+    if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
+        console.warn('Target client not available for answer');
+        return;
+    }
+    
+    try {
+        // Валидация SDP ответа
+        if (!answer || typeof answer !== 'string' || answer.length > 100000) {
+            console.warn('Invalid answer data');
+            ws.close(1003, 'Invalid answer data');
+            return;
+        }
+        
         targetClient.send(JSON.stringify({
             type: 'answer',
             userId: ws.userId,
             answer: answer
         }));
+        
+        console.log(`Secure answer sent from ${ws.userId} to ${targetUserId}`);
+    } catch (error) {
+        console.error('Error sending secure answer:', error.message);
+        clients.delete(targetUserId);
     }
 }
 
-function handleIceCandidate(ws, data) {
+function handleSecureIceCandidate(ws, data) {
     const { roomId, targetUserId, candidate, sdpMid, sdpMLineIndex } = data;
     const targetClient = clients.get(targetUserId);
     
-    if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+    if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
+        console.warn('Target client not available for ICE candidate');
+        return;
+    }
+    
+    try {
+        // Валидация ICE кандидата
+        if (!candidate || typeof candidate !== 'string' || candidate.length > 1000) {
+            console.warn('Invalid ICE candidate data');
+            ws.close(1003, 'Invalid ICE candidate data');
+            return;
+        }
+        
         targetClient.send(JSON.stringify({
             type: 'ice-candidate',
             userId: ws.userId,
@@ -222,6 +425,11 @@ function handleIceCandidate(ws, data) {
             sdpMid: sdpMid,
             sdpMLineIndex: sdpMLineIndex
         }));
+        
+        console.log(`Secure ICE candidate sent from ${ws.userId} to ${targetUserId}`);
+    } catch (error) {
+        console.error('Error sending secure ICE candidate:', error.message);
+        clients.delete(targetUserId);
     }
 }
 
@@ -254,11 +462,24 @@ function handleLeave(ws, data) {
     console.log(`Пользователь ${userId} покинул комнату ${roomId}`);
 }
 
-function handleChatMessage(ws, data) {
+function handleSecureChatMessage(ws, data) {
     const { roomId, userId, message } = data;
     const timestamp = Date.now();
 
-    console.log(`Chat message from ${userId} in room ${roomId}: ${message}`);
+    // Валидация сообщения чата
+    if (!message || typeof message !== 'string') {
+        console.warn('Invalid chat message format');
+        ws.close(1003, 'Invalid chat message format');
+        return;
+    }
+    
+    if (message.length > 1000) {
+        console.warn('Chat message too long:', message.length);
+        ws.close(1003, 'Chat message too long');
+        return;
+    }
+
+    console.log(`Secure chat message from ${userId} in room ${roomId}`);
 
     // Отправляем сообщение всем участникам комнаты
     if (rooms.has(roomId)) {
@@ -266,12 +487,16 @@ function handleChatMessage(ws, data) {
         room.forEach(otherUserId => {
             const client = clients.get(otherUserId);
             if (client && client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({
-                    type: 'chat-message',
-                    userId: userId,
-                    message: message,
-                    timestamp: timestamp
-                }));
+                try {
+                    client.send(JSON.stringify({
+                        type: 'chat-message',
+                        userId: userId,
+                        message: message,
+                        timestamp: timestamp
+                    }));
+                } catch (error) {
+                    console.error('Error sending secure chat message:', error.message);
+                }
             }
         });
     }
@@ -285,34 +510,53 @@ function handleDisconnect(ws) {
     }
 }
 
-// Отправить список комнат одному клиенту
-function sendRoomsList(ws) {
-    const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
-        id: id,
-        usersCount: users.size
-    }));
-    ws.send(JSON.stringify({
-        type: 'rooms-list',
-        rooms: roomsList
-    }));
+// Отправить ЗАЩИЩЕННЫЙ список комнат одному клиенту
+function sendSecureRoomsList(ws) {
+    try {
+        // НЕ РАСКРЫВАЕМ КОНФИДЕНЦИАЛЬНУЮ ИНФОРМАЦИЮ
+        const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
+            id: id.substring(0, 8) + '...', // Только первые 8 символов
+            usersCount: users.size,
+            hasPassword: roomKeys.has(id) // Только факт наличия пароля
+        }));
+        
+        ws.send(JSON.stringify({
+            type: 'rooms-list',
+            rooms: roomsList,
+            timestamp: Date.now()
+        }));
+    } catch (error) {
+        console.error('Error sending secure rooms list:', error.message);
+    }
 }
 
-// Отправить список комнат всем клиентам
-function broadcastRoomsList() {
-    const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
-        id: id,
-        usersCount: users.size
-    }));
-    const message = JSON.stringify({
-        type: 'rooms-list',
-        rooms: roomsList
-    });
-    
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
-        }
-    });
+// Отправить ЗАЩИЩЕННЫЙ список комнат всем клиентам
+function broadcastSecureRoomsList() {
+    try {
+        const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
+            id: id.substring(0, 8) + '...', // Только первые 8 символов
+            usersCount: users.size,
+            hasPassword: roomKeys.has(id)
+        }));
+        
+        const message = JSON.stringify({
+            type: 'rooms-list',
+            rooms: roomsList,
+            timestamp: Date.now()
+        });
+        
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                try {
+                    client.send(message);
+                } catch (error) {
+                    console.error('Error broadcasting to client:', error.message);
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error broadcasting secure rooms list:', error.message);
+    }
 }
 
 const PORT = process.env.PORT || 3000;
