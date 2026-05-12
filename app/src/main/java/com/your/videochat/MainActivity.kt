@@ -188,16 +188,25 @@ class MainActivity : AppCompatActivity() {
                         "room-created" -> {
                             val roomId = json.getString("roomId")
                             val roomName = json.getString("roomName")
+                            val userId = json.getString("userId")
                             
                             runOnUiThread {
                                 Toast.makeText(
                                     this@MainActivity,
-                                    "Комната '$roomName' создана!",
+                                    "Комната '$roomName' создана! Перенаправление в видеозвонок...",
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 roomNameInput.text.clear()
-                                // Автоматически обновляем список комнат
-                                webSocket?.send("{\"type\":\"get-rooms\"}")
+                                
+                                // Автоматически переходим в созданную комнату как создатель
+                                val intent = Intent(this@MainActivity, VideoCallActivity::class.java)
+                                Log.d(TAG, "Passing roomId to VideoCallActivity: $roomId")
+                                intent.putExtra("roomId", roomId)
+                                intent.putExtra("serverUrl", SERVER_URL)
+                                intent.putExtra("roomPassword", "1234")
+                                intent.putExtra("isCreator", true) // Помечаем что это создатель
+                                intent.putExtra("userId", userId) // Передаем userId от сервера
+                                startActivity(intent)
                             }
                         }
                         "error" -> {

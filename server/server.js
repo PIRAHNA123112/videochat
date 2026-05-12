@@ -440,6 +440,14 @@ function handleSecureJoin(ws, data) {
                 type: 'user-joined',
                 userId: userId
             }));
+            
+            // Также отправляем обновленный список пользователей всем участникам
+            const allUsers = Array.from(room);
+            client.send(JSON.stringify({
+                type: 'room-users',
+                users: allUsers,
+                userId: otherUserId  // Отправляем клиенту его userId
+            }));
         }
     });
     

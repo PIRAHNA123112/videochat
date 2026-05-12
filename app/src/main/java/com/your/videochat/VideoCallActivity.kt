@@ -47,6 +47,9 @@ class VideoCallActivity : AppCompatActivity() {
     private var isFrontCamera = false
     private var callStartTime: Long = 0
     private val callDurationHandler = Handler(Looper.getMainLooper())
+    private val iceCheckHandler = Handler(Looper.getMainLooper())
+    private var iceCheckCount = 0
+    private val mediaCheckHandler = Handler(Looper.getMainLooper())
 
     private var peerConnection: PeerConnection? = null
     private var localVideoTrack: VideoTrack? = null
@@ -108,9 +111,15 @@ class VideoCallActivity : AppCompatActivity() {
         // Google STUN servers - самые быстрые
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
         // Дополнительные STUN для надежности
         PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer(),
-        // TURN серверы для NAT traversal (если доступны)
+        PeerConnection.IceServer.builder("stun:stun.stunprotocol.org:3478").createIceServer(),
+        // Microsoft STUN для дополнительной надежности
+        PeerConnection.IceServer.builder("stun:stun.services.mozilla.com:3478").createIceServer(),
+        // TURN серверы для NAT traversal (бесплатные для тестирования)
+        PeerConnection.IceServer.builder("stun:openrelay.metered.ca:80").createIceServer(),
+        // TURN серверы для сложных NAT ситуаций
         // PeerConnection.IceServer.builder("turn:your-turn-server.com:3478").setUsername("user").setPassword("pass").createIceServer()
     )
 
@@ -142,7 +151,17 @@ class VideoCallActivity : AppCompatActivity() {
             return
         }
         SERVER_URL = serverUrl
-        Log.d(TAG, "Room ID: $roomId, User ID: $userId, Server: $SERVER_URL")
+        
+        // Проверяем является ли пользователь создателем комнаты
+        val isCreator = intent.getBooleanExtra("isCreator", false)
+        val creatorUserId = intent.getStringExtra("userId")
+        
+        if (isCreator && creatorUserId != null) {
+            userId = creatorUserId
+            Log.d(TAG, "User is room creator with ID: $userId")
+        }
+        
+        Log.d(TAG, "Room ID: $roomId, User ID: $userId, Server: $SERVER_URL, Is Creator: $isCreator")
         
         initViews()
         initializeWebRTC()
@@ -221,12 +240,13 @@ class VideoCallActivity : AppCompatActivity() {
         // Оптимизированные настройки для максимальной скорости
         config.iceConnectionReceivingTimeout = 1000  // 1 секунда для быстрого переключения
         config.iceBackupCandidatePairPingInterval = 500  // 0.5 секунды для быстрой проверки
-        config.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
         config.iceCandidatePoolSize = 20  // Увеличиваем пул кандидатов
         config.bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE  // Оптимизация带宽
         config.rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE  // Уменьшение трафика
         config.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED  // Отключаем TCP для скорости
         config.candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.LOW_COST  // Приоритет WiFi/4G
+        config.keyType = PeerConnection.KeyType.ECDSA  // Современный тип ключа
+        config.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_ONCE  // Собираем кандидатов один раз
         
         peerConnection = peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate) {
@@ -297,10 +317,58 @@ class VideoCallActivity : AppCompatActivity() {
             }
             override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
                 Log.d(TAG, "ICE connection state: $state")
+                
+                when (state) {
+                    PeerConnection.IceConnectionState.NEW -> {
+                        Log.d(TAG, "ICE: NEW - Just created")
+                    }
+                    PeerConnection.IceConnectionState.CHECKING -> {
+                        Log.d(TAG, "ICE: CHECKING - Trying to connect")
+                    }
+                    PeerConnection.IceConnectionState.CONNECTED -> {
+                        Log.d(TAG, "ICE: CONNECTED - Connected but not yet ready")
+                    }
+                    PeerConnection.IceConnectionState.COMPLETED -> {
+                        Log.d(TAG, "ICE: COMPLETED - Connection established and ready!")
+                        runOnUiThread {
+                            Toast.makeText(this@VideoCallActivity, "Соединение установлено!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    PeerConnection.IceConnectionState.FAILED -> {
+                        Log.e(TAG, "ICE: FAILED - Connection failed")
+                        runOnUiThread {
+                            Toast.makeText(this@VideoCallActivity, "Ошибка соединения", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                        Log.w(TAG, "ICE: DISCONNECTED - Connection lost")
+                    }
+                    PeerConnection.IceConnectionState.CLOSED -> {
+                        Log.w(TAG, "ICE: CLOSED - Connection closed")
+                    }
+                }
             }
             override fun onIceConnectionReceivingChange(receiving: Boolean) {}
             override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) {
                 Log.d(TAG, "ICE gathering state: $state")
+                
+                when (state) {
+                    PeerConnection.IceGatheringState.NEW -> {
+                        Log.d(TAG, "ICE gathering: NEW - Just started")
+                    }
+                    PeerConnection.IceGatheringState.GATHERING -> {
+                        Log.d(TAG, "ICE gathering: GATHERING - Collecting candidates")
+                    }
+                    PeerConnection.IceGatheringState.COMPLETE -> {
+                        Log.d(TAG, "ICE gathering: COMPLETE - All candidates collected")
+                        // Сбрасываем счетчик и начинаем проверку состояния
+                        iceCheckCount = 0
+                        // Проверяем состояние подключения через 3 секунды
+                        iceCheckHandler.postDelayed({
+                            checkIceConnection()
+                        }, 3000)
+                    }
+                }
             }
             override fun onRemoveStream(stream: MediaStream) {}
             override fun onDataChannel(channel: DataChannel) {}
@@ -309,6 +377,123 @@ class VideoCallActivity : AppCompatActivity() {
             }
         })
         Log.d(TAG, "PeerConnection created")
+    }
+
+    private fun checkIceConnection() {
+        iceCheckCount++
+        Log.d(TAG, "🔍 ICE connection check #$iceCheckCount")
+        
+        val iceState = peerConnection?.iceConnectionState()
+        val connectionState = peerConnection?.connectionState()
+        val signalingState = peerConnection?.signalingState()
+        
+        Log.d(TAG, "📊 Current states:")
+        Log.d(TAG, "  ICE state: $iceState")
+        Log.d(TAG, "  Connection state: $connectionState")
+        Log.d(TAG, "  Signaling state: $signalingState")
+        Log.d(TAG, "  Remote user ID: $remoteUserId")
+        Log.d(TAG, "  Local video track: ${localVideoTrack != null}")
+        Log.d(TAG, "  Remote video track: ${remoteVideoTrack != null}")
+        
+        if (iceState == PeerConnection.IceConnectionState.COMPLETED) {
+            Log.d(TAG, "🎉 ICE connection completed successfully!")
+            runOnUiThread {
+                Toast.makeText(this, "Соединение установлено!", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        
+        if (iceState == PeerConnection.IceConnectionState.FAILED || 
+            iceState == PeerConnection.IceConnectionState.DISCONNECTED ||
+            iceState == PeerConnection.IceConnectionState.CLOSED) {
+            
+            Log.e(TAG, "❌ ICE connection failed/disconnected/closed")
+            
+            if (iceCheckCount < 3) {
+                Log.d(TAG, "🔄 Attempting to restart ICE connection...")
+                restartPeerConnection()
+            } else {
+                Log.e(TAG, "⏰ Max ICE restart attempts reached")
+                runOnUiThread {
+                    Toast.makeText(this, "Не удалось установить соединение", Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+        
+        if (iceCheckCount < 8) {
+            // Проверяем еще раз через 3 секунды
+            iceCheckHandler.postDelayed({
+                checkIceConnection()
+            }, 3000)
+        } else {
+            Log.e(TAG, "⏱️ ICE connection timeout - forcing restart")
+            restartPeerConnection()
+        }
+    }
+
+    private fun restartPeerConnection() {
+        Log.d(TAG, "Restarting PeerConnection...")
+        
+        try {
+            // Сохраняем текущее состояние
+            val currentRemoteUserId = remoteUserId
+            
+            // Закрываем старое соединение
+            peerConnection?.close()
+            peerConnection = null
+            
+            // Сбрасываем счетчик ICE проверок
+            iceCheckCount = 0
+            
+            // Проверяем что PeerConnectionFactory не null
+            if (peerConnectionFactory == null) {
+                Log.e(TAG, "PeerConnectionFactory is null, reinitializing WebRTC...")
+                initializeWebRTC()
+            }
+            
+            // Создаем новое соединение
+            createPeerConnection()
+            
+            // Добавляем локальные треки
+            localVideoTrack?.let { videoTrack ->
+                peerConnection?.addTrack(videoTrack, listOf("ARDAMS"))
+                Log.d(TAG, "Local video track added to new PeerConnection")
+            }
+            
+            localAudioTrack?.let { audioTrack ->
+                peerConnection?.addTrack(audioTrack, listOf("ARDAMS"))
+                Log.d(TAG, "Local audio track added to new PeerConnection")
+            }
+            
+            // Если есть удаленный пользователь, создаем offer
+            if (currentRemoteUserId.isNotEmpty()) {
+                remoteUserId = currentRemoteUserId
+                createOffer()
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restarting PeerConnection: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private fun checkMediaState() {
+        runOnUiThread {
+            val localVideoActive = localVideoTrack?.enabled() == true
+            val remoteVideoActive = remoteVideoTrack?.enabled() == true
+            val localAudioActive = localAudioTrack?.enabled() == true
+            
+            Log.d(TAG, "Media state check:")
+            Log.d(TAG, "  Local video: $localVideoActive")
+            Log.d(TAG, "  Remote video: $remoteVideoActive") 
+            Log.d(TAG, "  Local audio: $localAudioActive")
+            
+            if (!localVideoActive) {
+                Log.w(TAG, "Local video is not active - attempting to restart")
+                restartPeerConnection()
+            }
+        }
     }
 
     private fun startLocalVideo() {
@@ -375,6 +560,11 @@ class VideoCallActivity : AppCompatActivity() {
                 Log.d(TAG, "Remote user found, creating offer after local video started")
                 createOffer()
             }
+            
+            // Запускаем периодическую проверку медиа состояния
+            mediaCheckHandler.postDelayed({
+                checkMediaState()
+            }, 3000)
         } else {
             Log.e(TAG, "Failed to create camera capturer")
         }
@@ -486,7 +676,7 @@ class VideoCallActivity : AppCompatActivity() {
                 .addHeader("Sec-WebSocket-Protocol", "chat")
                 .addHeader("Upgrade", "websocket")
                 .addHeader("Sec-WebSocket-Version", "13")
-                .timeout(30, java.util.concurrent.TimeUnit.SECONDS) // Увеличенный таймаут для эмулятора
+            // Увеличенный таймаут для эмулятора будет установлен в OkHttpClient
         }
         
         val request = requestBuilder.build()
@@ -495,7 +685,18 @@ class VideoCallActivity : AppCompatActivity() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket connected successfully!")
                 reconnectAttempts = 0  // Сброс счетчика переподключений
-                joinRoom()
+                
+                // Проверяем является ли пользователь создателем комнаты
+                val isCreator = intent.getBooleanExtra("isCreator", false)
+                
+                if (isCreator) {
+                    Log.d(TAG, "User is room creator - skipping join request")
+                    // Создатель уже в комнате, просто начинаем heartbeat
+                } else {
+                    // Обычный пользователь отправляет join запрос
+                    joinRoom()
+                }
+                
                 startHeartbeat()
             }
 
@@ -721,18 +922,54 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun handleIceCandidate(json: JSONObject) {
-        val candidate = IceCandidate(
-            json.getString("sdpMid"),
-            json.getInt("sdpMLineIndex"),
-            json.getString("candidate")
-        )
-        Log.d(TAG, "Adding ICE candidate")
-        peerConnection?.addIceCandidate(candidate)
+        try {
+            val sdpMid = json.getString("sdpMid")
+            val sdpMLineIndex = json.getInt("sdpMLineIndex")
+            val sdp = json.getString("candidate")
+            
+            Log.d(TAG, "🧊 Received ICE candidate:")
+            Log.d(TAG, "  sdpMid: $sdpMid")
+            Log.d(TAG, "  sdpMLineIndex: $sdpMLineIndex")
+            Log.d(TAG, "  candidate: $sdp")
+            
+            val candidate = IceCandidate(sdpMid, sdpMLineIndex, sdp)
+            
+            if (peerConnection == null) {
+                Log.e(TAG, "❌ PeerConnection is null when adding ICE candidate")
+                return
+            }
+            
+            val connectionState = peerConnection?.connectionState()
+            val iceState = peerConnection?.iceConnectionState()
+            
+            Log.d(TAG, "PeerConnection state: $connectionState")
+            Log.d(TAG, "ICE connection state: $iceState")
+            
+            // Проверяем состояние перед добавлением кандидата
+            if (iceState == PeerConnection.IceConnectionState.NEW || 
+                iceState == PeerConnection.IceConnectionState.CHECKING ||
+                iceState == PeerConnection.IceConnectionState.CONNECTED) {
+                
+                peerConnection?.addIceCandidate(candidate)
+                Log.d(TAG, "✅ ICE candidate added successfully")
+                
+                // Принудительно проверяем состояние через 2 секунды
+                iceCheckHandler.postDelayed({
+                    checkIceConnection()
+                }, 2000)
+            } else {
+                Log.w(TAG, "⚠️ ICE state is $iceState - candidate may not be processed")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error handling ICE candidate: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     private fun handleRoomUsers(json: JSONObject) {
         val users = json.getJSONArray("users")
-        Log.d(TAG, "Room users received: $users")
+        Log.d(TAG, "👥 Room users received: $users")
         
         // Обновляем свой userId от сервера (если пришел в ответе)
         if (json.has("userId")) {
@@ -741,19 +978,29 @@ class VideoCallActivity : AppCompatActivity() {
         }
         
         // Ищем других пользователей в комнате (кроме себя)
+        var foundRemoteUser = false
         for (i in 0 until users.length()) {
             val userId = users.getString(i)
+            Log.d(TAG, "Checking user: $userId (me: $this.userId)")
+            
             if (userId != this.userId) {
                 remoteUserId = userId
-                Log.d(TAG, "Found remote user: $remoteUserId")
+                foundRemoteUser = true
+                Log.d(TAG, "👤 Found remote user: $remoteUserId")
+                
                 // Если мы нашли собеседника и локальное видео запущено, создаем offer
                 if (localVideoTrack != null) {
+                    Log.d(TAG, "📹 Local video ready, creating offer for remote user")
                     createOffer()
                 } else {
-                    Log.d(TAG, "Local video not ready yet, will create offer when ready")
+                    Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
                 }
                 break
             }
+        }
+        
+        if (!foundRemoteUser) {
+            Log.d(TAG, "🔍 No remote users found, waiting for someone to join")
         }
     }
 
