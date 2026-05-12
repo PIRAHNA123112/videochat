@@ -111,11 +111,21 @@ wss.on('connection', (ws, req) => {
     });
     
     ws.on('message', (message) => {
+        // Логируем все сообщения для диагностики
+        console.log(`📨 Received message from ${ws.userId || 'unknown'}: ${message}`);
+        
         try {
-            const data = JSON.parse(message);
+            let data;
             
-            // Логируем все сообщения для диагностики
-            console.log(`📨 Message from ${ws.userId || 'unknown'} (${ws.clientType}): ${data.type}`);
+            // Обработка plain text ping сообщений
+            if (message.toString().trim() === 'ping') {
+                data = { type: 'ping' };
+                console.log('📡 Plain text ping detected, converting to JSON');
+            } else {
+                data = JSON.parse(message);
+            }
+            
+            console.log(`🔍 Processing message: ${data.type} from ${ws.userId || 'unknown'}`);
             
             // Обработка ping сообщений с улучшенной поддержкой мобильных
             if (data.type === 'ping') {
