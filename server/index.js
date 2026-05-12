@@ -37,9 +37,24 @@ const clients = new Map();
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection');
     
+    // Устанавливаем флаг для heartbeat
+    ws.isAlive = true;
+    
+    // Обработка ping/pong
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+    
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+            
+            // Обработка ping сообщений
+            if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                return;
+            }
+            
             handleMessage(ws, data);
         } catch (error) {
             console.error('Error parsing message:', error);
@@ -54,6 +69,19 @@ wss.on('connection', (ws) => {
         console.error('WebSocket error:', error);
     });
 });
+
+// Heartbeat интервал - проверка каждые 30 секунд
+const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) {
+            console.log('Terminating inactive connection');
+            return ws.terminate();
+        }
+        
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
 
 function handleMessage(ws, data) {
     switch (data.type) {
