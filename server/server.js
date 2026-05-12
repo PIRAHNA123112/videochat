@@ -302,10 +302,13 @@ const heartbeatInterval = setInterval(() => {
 }, 20000);
 
 function handleMessage(ws, data) {
+    console.log(`🔍 Processing message: ${data.type} from ${ws.userId || 'unknown'}`);
+    console.log(`📊 Message data:`, JSON.stringify(data, null, 2));
+    
     // Валидация типа сообщения
     const allowedTypes = ['join', 'offer', 'answer', 'ice-candidate', 'leave', 'get-rooms', 'chat-message', 'create-room'];
     if (!allowedTypes.includes(data.type)) {
-        console.warn('Invalid message type:', data.type);
+        console.warn('❌ Invalid message type:', data.type);
         ws.close(1003, 'Invalid message type');
         return;
     }
@@ -313,7 +316,7 @@ function handleMessage(ws, data) {
     // Валидация размера сообщения
     const messageSize = JSON.stringify(data).length;
     if (messageSize > 10240) { // 10KB лимит
-        console.warn('Message too large:', messageSize);
+        console.warn('❌ Message too large:', messageSize);
         ws.close(1009, 'Message too large');
         return;
     }

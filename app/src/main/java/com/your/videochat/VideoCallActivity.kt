@@ -990,8 +990,10 @@ class VideoCallActivity : AppCompatActivity() {
         
         // Обновляем свой userId от сервера (если пришел в ответе)
         if (json.has("userId")) {
-            this.userId = json.getString("userId")
-            Log.d(TAG, "Updated userId from server: $this.userId")
+            val serverUserId = json.getString("userId")
+            this.userId = serverUserId
+            Log.d(TAG, "✅ Updated userId from server: $this.userId")
+            Log.d(TAG, "📝 Server userId: $serverUserId, Local userId: $this.userId")
         }
         
         // Ищем других пользователей в комнате (кроме себя)
@@ -1139,12 +1141,12 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun sendOffer(sessionDescription: SessionDescription) {
         if (remoteUserId.isBlank()) {
-            Log.e(TAG, "Cannot send offer: remoteUserId is empty")
+            Log.e(TAG, "❌ Cannot send offer: remoteUserId is empty")
             return
         }
         
         if (webSocket == null) {
-            Log.e(TAG, "Cannot send offer: WebSocket is null")
+            Log.e(TAG, "❌ Cannot send offer: WebSocket is null")
             return
         }
         
@@ -1155,7 +1157,8 @@ class VideoCallActivity : AppCompatActivity() {
             put("targetUserId", remoteUserId)
             put("offer", sessionDescription.description)
         }
-        Log.d(TAG, "Sending offer to: $remoteUserId")
+        Log.d(TAG, "📤 Sending offer to: $remoteUserId")
+        Log.d(TAG, "📤 Offer message: ${message.toString()}")
         webSocket?.send(message.toString())
     }
 
@@ -1201,7 +1204,8 @@ class VideoCallActivity : AppCompatActivity() {
             put("sdpMid", candidate.sdpMid)
             put("sdpMLineIndex", candidate.sdpMLineIndex)
         }
-        Log.d(TAG, "Sending ICE candidate")
+        Log.d(TAG, "🧊 Sending ICE candidate to: $remoteUserId")
+        Log.d(TAG, "🧊 ICE message: ${message.toString()}")
         webSocket?.send(message.toString())
     }
 
