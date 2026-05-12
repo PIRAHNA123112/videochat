@@ -692,8 +692,9 @@ class VideoCallActivity : AppCompatActivity() {
                 val isCreator = intent.getBooleanExtra("isCreator", false)
                 
                 if (isCreator) {
-                    Log.d(TAG, "User is room creator - skipping join request")
-                    // Создатель уже в комнате, просто начинаем heartbeat
+                    Log.d(TAG, "👑 User is room creator - joining room as creator")
+                    // Создатель тоже должен войти в комнату
+                    joinRoom()
                 } else {
                     // Обычный пользователь отправляет join запрос
                     joinRoom()

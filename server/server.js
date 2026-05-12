@@ -378,6 +378,8 @@ function handleCreateRoom(ws, data) {
     ws.roomId = roomId;
     ws.userId = userId;
     
+    console.log(`👑 Room created: ${roomId} by user ${userId}`);
+    
     console.log(`Room created and user joined: ${roomId} (${roomName}) by user ${userId}`);
     
     // Отправляем подтверждение создателю с информацией о входе
@@ -389,18 +391,19 @@ function handleCreateRoom(ws, data) {
         message: 'Комната создана и вы вошли в неё'
     }));
     
+    // Отправляем создателю список пользователей в комнате
+    const roomUsers = Array.from(rooms.get(roomId) || []);
+    ws.send(JSON.stringify({
+        type: 'room-users',
+        users: roomUsers,
+        userId: userId  // Отправляем клиенту его userId
+    }));
+    
     // Рассылаем обновленный список всем клиентам
     broadcastSecureRoomsList();
     
     // Сохраняем комнаты в файл
     saveRooms();
-    
-    // Отправляем список пользователей в комнате
-    const roomUsers = Array.from(rooms.get(roomId) || []);
-    ws.send(JSON.stringify({
-        type: 'room-users',
-        users: roomUsers
-    }));
     
     // Автоматическое удаление через 24 часа
     setTimeout(() => {
