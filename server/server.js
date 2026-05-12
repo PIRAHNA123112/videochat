@@ -520,9 +520,14 @@ function handleSecureOffer(ws, data) {
             offer: offer
         };
         
-        targetClient.send(JSON.stringify(offerMessage));
-        console.log(`✅ Secure offer sent from ${ws.userId} to ${targetUserId}`);
-        console.log(`Offer message size: ${JSON.stringify(offerMessage).length} bytes`);
+        try {
+            targetClient.send(JSON.stringify(offerMessage));
+            console.log(`✅ Secure offer sent from ${ws.userId} to ${targetUserId}`);
+            console.log(`Offer message size: ${JSON.stringify(offerMessage).length} bytes`);
+            console.log(`Target client readyState: ${targetClient.readyState}`);
+        } catch (sendError) {
+            console.error(`❌ Error sending offer to ${targetUserId}:`, sendError.message);
+        }
     } catch (error) {
         console.error('❌ Error sending secure offer:', error.message);
         clients.delete(targetUserId);
@@ -557,9 +562,14 @@ function handleSecureAnswer(ws, data) {
             answer: answer
         };
         
-        targetClient.send(JSON.stringify(answerMessage));
-        console.log(`✅ Secure answer sent from ${ws.userId} to ${targetUserId}`);
-        console.log(`Answer message size: ${JSON.stringify(answerMessage).length} bytes`);
+        try {
+            targetClient.send(JSON.stringify(answerMessage));
+            console.log(`✅ Secure answer sent from ${ws.userId} to ${targetUserId}`);
+            console.log(`Answer message size: ${JSON.stringify(answerMessage).length} bytes`);
+            console.log(`Target client readyState: ${targetClient.readyState}`);
+        } catch (sendError) {
+            console.error(`❌ Error sending answer to ${targetUserId}:`, sendError.message);
+        }
     } catch (error) {
         console.error('❌ Error sending secure answer:', error.message);
         clients.delete(targetUserId);
@@ -596,9 +606,14 @@ function handleSecureIceCandidate(ws, data) {
             sdpMLineIndex: sdpMLineIndex
         };
         
-        targetClient.send(JSON.stringify(iceMessage));
-        console.log(`✅ Secure ICE candidate sent from ${ws.userId} to ${targetUserId}`);
-        console.log(`ICE message size: ${JSON.stringify(iceMessage).length} bytes`);
+        try {
+            targetClient.send(JSON.stringify(iceMessage));
+            console.log(`✅ Secure ICE candidate sent from ${ws.userId} to ${targetUserId}`);
+            console.log(`ICE message size: ${JSON.stringify(iceMessage).length} bytes`);
+            console.log(`Target client readyState: ${targetClient.readyState}`);
+        } catch (sendError) {
+            console.error(`❌ Error sending ICE candidate to ${targetUserId}:`, sendError.message);
+        }
     } catch (error) {
         console.error('❌ Error sending secure ICE candidate:', error.message);
         clients.delete(targetUserId);

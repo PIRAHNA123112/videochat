@@ -683,7 +683,9 @@ class VideoCallActivity : AppCompatActivity() {
 
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "WebSocket connected successfully!")
+                Log.d(TAG, "🔌 WebSocket connected successfully!")
+                Log.d(TAG, "🔌 Response code: ${response.code}")
+                Log.d(TAG, "🔌 Response message: ${response.message}")
                 reconnectAttempts = 0  // Сброс счетчика переподключений
                 
                 // Проверяем является ли пользователь создателем комнаты
@@ -705,7 +707,7 @@ class VideoCallActivity : AppCompatActivity() {
                 if (text.contains("\"type\":\"pong\"")) {
                     return
                 }
-                Log.d(TAG, "Received message: $text")
+                Log.d(TAG, "📨 Received message: $text")
                 handleSignallingMessage(text)
             }
 
