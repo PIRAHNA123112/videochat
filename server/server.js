@@ -5,30 +5,8 @@ const express = require('express');
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket сервер с обработкой upgrade
-const wss = new WebSocket.Server({
-    server,
-    verifyClient: (info, callback) => {
-        callback(true); // Разрешаем все подключения
-    }
-});
-
-// Обработка upgrade запросов с детальным логированием
-server.on('upgrade', (request, socket, head) => {
-    console.log('WebSocket upgrade request received');
-    console.log('Headers:', request.headers);
-    console.log('URL:', request.url);
-    
-    try {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-            console.log('WebSocket connection established');
-            wss.emit('connection', ws, request);
-        });
-    } catch (error) {
-        console.error('WebSocket upgrade error:', error);
-        socket.destroy();
-    }
-});
+// WebSocket сервер
+const wss = new WebSocket.Server({ server });
 
 // CORS для HTTP запросов
 app.use((req, res, next) => {
@@ -89,8 +67,10 @@ const rooms = new Map();
 // Хранилище для подключений
 const clients = new Map();
 
-wss.on('connection', (ws) => {
-    console.log('Новое подключение');
+wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection from:', req.url);
+    console.log('Headers:', req.headers);
+    console.log('Remote address:', req.socket.remoteAddress);
     
     // Heartbeat для поддержания соединения
     ws.isAlive = true;
