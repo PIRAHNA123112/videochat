@@ -838,6 +838,7 @@ class VideoCallActivity : AppCompatActivity() {
             put("type", "join")
             put("roomId", roomId)
             put("roomPassword", roomPassword)
+            put("userId", userId)  // Отправляем существующий userId
         }
         Log.d(TAG, "🚀 Joining secure room: $message")
         Log.d(TAG, "🚀 Room ID: $roomId, User ID: $userId, Password: $roomPassword")

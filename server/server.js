@@ -425,8 +425,9 @@ function handleSecureJoin(ws, data) {
         return;
     }
     
-    // Генерируем новый userId для входящего пользователя
-    const userId = crypto.randomBytes(8).toString('hex');
+    // Используем существующий userId клиента или генерируем новый
+    let userId = data.userId || crypto.randomBytes(8).toString('hex');
+    console.log(`Join request - Room: ${roomId}, User: ${userId}, Has userId: ${!!data.userId}`);
     
     if (!rooms.has(roomId)) {
         console.warn('Room not found:', roomId);
