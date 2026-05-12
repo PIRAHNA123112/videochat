@@ -543,7 +543,6 @@ class VideoCallActivity : AppCompatActivity() {
         val message = JSONObject().apply {
             put("type", "join")
             put("roomId", roomId)
-            put("userId", userId)
             put("roomPassword", roomPassword)
         }
         Log.d(TAG, "Joining secure room: $message")
@@ -651,6 +650,12 @@ class VideoCallActivity : AppCompatActivity() {
     private fun handleRoomUsers(json: JSONObject) {
         val users = json.getJSONArray("users")
         Log.d(TAG, "Room users received: $users")
+        
+        // Обновляем свой userId от сервера (если пришел в ответе)
+        if (json.has("userId")) {
+            this.userId = json.getString("userId")
+            Log.d(TAG, "Updated userId from server: $this.userId")
+        }
         
         // Ищем других пользователей в комнате (кроме себя)
         for (i in 0 until users.length()) {

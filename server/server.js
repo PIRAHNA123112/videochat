@@ -347,14 +347,17 @@ function handleCreateRoom(ws, data) {
 }
 
 function handleSecureJoin(ws, data) {
-    const { roomId, userId } = data;
+    const { roomId } = data;
     
     // Валидация входных данных
-    if (!roomId || !userId) {
+    if (!roomId) {
         console.warn('Missing required fields for join');
         ws.close(1003, 'Missing required fields');
         return;
     }
+    
+    // Генерируем новый userId для входящего пользователя
+    const userId = crypto.randomBytes(8).toString('hex');
     
     if (!rooms.has(roomId)) {
         console.warn('Room not found:', roomId);
@@ -390,11 +393,12 @@ function handleSecureJoin(ws, data) {
         }
     });
     
-    // Отправляем список всех участников включая себя
+    // Отправляем список всех участников включая себя и новый userId
     const allUsers = Array.from(room);
     ws.send(JSON.stringify({
         type: 'room-users',
-        users: allUsers
+        users: allUsers,
+        userId: userId  // Отправляем клиенту его новый userId
     }));
 }
 
