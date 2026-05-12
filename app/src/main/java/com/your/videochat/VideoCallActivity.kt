@@ -108,19 +108,26 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private val iceServers = listOf(
-        // Google STUN servers - самые быстрые
+        // Google STUN servers - самые надежные
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
-        // Дополнительные STUN для надежности
+        PeerConnection.IceServer.builder("stun:stun3.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun4.l.google.com:19302").createIceServer(),
+        
+        // Cloudflare STUN - очень быстрый
+        PeerConnection.IceServer.builder("stun:stun.cloudflare.com:3478").createIceServer(),
+        
+        // Twilio STUN - высокая надежность
         PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer(),
-        PeerConnection.IceServer.builder("stun:stun.stunprotocol.org:3478").createIceServer(),
-        // Microsoft STUN для дополнительной надежности
-        PeerConnection.IceServer.builder("stun:stun.services.mozilla.com:3478").createIceServer(),
-        // TURN серверы для NAT traversal (бесплатные для тестирования)
-        PeerConnection.IceServer.builder("stun:openrelay.metered.ca:80").createIceServer(),
-        // TURN серверы для сложных NAT ситуаций
-        // PeerConnection.IceServer.builder("turn:your-turn-server.com:3478").setUsername("user").setPassword("pass").createIceServer()
+        
+        // Mozilla STUN - дополнительная надежность
+        PeerConnection.IceServer.builder("stun:stun.services.mozilla.com:3478").createIceServer()
+        
+        // Примечание: TURN серверы требуют аутентификации и платных аккаунтов
+        // Для production рекомендуется использовать платные TURN серверы
+        // Пример: PeerConnection.IceServer.builder("turn:your-turn-server.com:3478")
+        //     .setUsername("user").setPassword("pass").createIceServer()
     )
 
     private val permissions = arrayOf(
@@ -237,16 +244,21 @@ class VideoCallActivity : AppCompatActivity() {
         val config = PeerConnection.RTCConfiguration(iceServers)
         config.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         
-        // Оптимизированные настройки для максимальной скорости
-        config.iceConnectionReceivingTimeout = 1000  // 1 секунда для быстрого переключения
-        config.iceBackupCandidatePairPingInterval = 500  // 0.5 секунды для быстрой проверки
-        config.iceCandidatePoolSize = 20  // Увеличиваем пул кандидатов
-        config.bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE  // Оптимизация带宽
+        // Улучшенные настройки для надежного ICE соединения
+        config.iceConnectionReceivingTimeout = 5000  // 5 секунд для надежности
+        config.iceBackupCandidatePairPingInterval = 1000  // 1 секунда для стабильной проверки
+        config.iceCandidatePoolSize = 50  // Увеличиваем пул кандидатов для надежности
+        config.bundlePolicy = PeerConnection.BundlePolicy.MAX_BUNDLE  // Оптимизация трафика
         config.rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE  // Уменьшение трафика
-        config.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED  // Отключаем TCP для скорости
-        config.candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.LOW_COST  // Приоритет WiFi/4G
+        config.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.ENABLED  // Включаем TCP для надежности
+        config.candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.ALL  // Используем все сети
         config.keyType = PeerConnection.KeyType.ECDSA  // Современный тип ключа
-        config.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_ONCE  // Собираем кандидатов один раз
+        config.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUOUSLY  // Постоянный сбор кандидатов
+        
+        // Дополнительные настройки для надежности
+        config.enableCpuOveruseDetection = false  // Отключаем для стабильности
+        config.enableRtpDataChannel = true  // Включаем для совместимости
+        config.enableDtlsSrtp = true  // Безопасность
         
         peerConnection = peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate) {
