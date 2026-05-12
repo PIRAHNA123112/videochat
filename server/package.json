@@ -2,10 +2,9 @@
   "name": "webrtc-signalling-server",
   "version": "1.0.0",
   "description": "Signalling server for WebRTC video calls",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "deploy": "node deploy.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "ws": "^8.14.2",
