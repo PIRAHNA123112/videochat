@@ -3,6 +3,8 @@ const http = require('http');
 const express = require('express');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -166,12 +168,54 @@ app.get('/', (req, res) => {
     });
 });
 
+// Файл для сохранения комнат
+const ROOMS_FILE = path.join(__dirname, 'rooms.json');
+
+// Загружаем комнаты из файла при старте
+function loadRooms() {
+    try {
+        if (fs.existsSync(ROOMS_FILE)) {
+            const data = fs.readFileSync(ROOMS_FILE, 'utf8');
+            const savedRooms = JSON.parse(data);
+            
+            // Восстанавливаем Map из сохраненных данных
+            for (const [roomId, roomData] of Object.entries(savedRooms)) {
+                rooms.set(roomId, new Set(roomData.users));
+            }
+            
+            console.log(`Loaded ${rooms.size} rooms from file`);
+        }
+    } catch (error) {
+        console.error('Error loading rooms:', error.message);
+    }
+}
+
+// Сохраняем комнаты в файл
+function saveRooms() {
+    try {
+        const roomsData = {};
+        for (const [roomId, users] of rooms.entries()) {
+            roomsData[roomId] = {
+                users: Array.from(users)
+            };
+        }
+        
+        fs.writeFileSync(ROOMS_FILE, JSON.stringify(roomsData, null, 2));
+        console.log(`Saved ${rooms.size} rooms to file`);
+    } catch (error) {
+        console.error('Error saving rooms:', error.message);
+    }
+}
+
 // Хранилище для комнат с защитой
 const rooms = new Map();
 const roomKeys = new Map(); // Храним хеши паролей
 
 // Хранилище для подключений
 const clients = new Map();
+
+// Загружаем комнаты при старте сервера
+loadRooms();
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection from:', req.url);
@@ -329,6 +373,9 @@ function handleCreateRoom(ws, data) {
     // Рассылаем обновленный список всем клиентам
     broadcastSecureRoomsList();
     
+    // Сохраняем комнаты в файл
+    saveRooms();
+    
     // Отправляем список пользователей в комнате
     const roomUsers = Array.from(rooms.get(roomId) || []);
     ws.send(JSON.stringify({
@@ -380,6 +427,9 @@ function handleSecureJoin(ws, data) {
     ws.userId = userId;
     
     console.log(`User ${userId} joined room ${roomId}`);
+    
+    // Сохраняем изменения
+    saveRooms();
     
     // Уведомляем других участников
     const otherUsers = Array.from(room).filter(id => id !== userId);
@@ -506,6 +556,8 @@ function handleSecureLeave(ws, data) {
             roomKeys.delete(roomId);
             // Комната пуста - уведомить всех
             broadcastSecureRoomsList();
+            // Сохраняем изменения
+            saveRooms();
         } else {
             // Уведомить других участников
             room.forEach(otherUserId => {
