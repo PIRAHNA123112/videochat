@@ -87,7 +87,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun connectToServer() {
         val url = serverUrlInput.text.toString().trim()
-        if (url.isEmpty()) return
+        if (url.isEmpty()) {
+            runOnUiThread {
+                connectionStatus.text = "URL сервера не может быть пустым"
+                connectionStatus.setTextColor(resources.getColor(R.color.status_error, null))
+                loadingIndicator.visibility = View.GONE
+            }
+            return
+        }
 
         SERVER_URL = url
         runOnUiThread {
@@ -215,6 +222,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun joinRoom(roomId: String) {
+        if (roomId.isBlank()) {
+            Toast.makeText(this, "Название комнаты не может быть пустым", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        if (!::roomsAdapter.isInitialized) {
+            Toast.makeText(this, "Приложение не готово. Попробуйте снова.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         val intent = Intent(this, VideoCallActivity::class.java)
         intent.putExtra("roomId", roomId)
         intent.putExtra("serverUrl", SERVER_URL)

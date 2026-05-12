@@ -8,6 +8,7 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.cardview.widget.CardView
 import android.os.Handler
 import android.os.Looper
@@ -80,8 +81,21 @@ class VideoCallActivity : AppCompatActivity() {
 
         roomId = intent.getStringExtra("roomId") ?: ""
         
+        if (roomId.isBlank()) {
+            Log.e(TAG, "Room ID is null or empty")
+            Toast.makeText(this, "Ошибка: ID комнаты не указан", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        
         // Определяем URL сервера
         val serverUrl = intent.getStringExtra("serverUrl") ?: SERVER_URL
+        if (serverUrl.isBlank()) {
+            Log.e(TAG, "Server URL is null or empty")
+            Toast.makeText(this, "Ошибка: URL сервера не указан", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         SERVER_URL = serverUrl
         Log.d(TAG, "Room ID: $roomId, User ID: $userId, Server: $SERVER_URL")
         
@@ -140,6 +154,12 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun createPeerConnection() {
         Log.d(TAG, "Creating PeerConnection...")
+        
+        if (peerConnectionFactory == null) {
+            Log.e(TAG, "PeerConnectionFactory is null")
+            return
+        }
+        
         val config = PeerConnection.RTCConfiguration(iceServers)
         config.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         
@@ -198,6 +218,12 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun startLocalVideo() {
         Log.d(TAG, "Starting local video...")
+        
+        if (peerConnectionFactory == null) {
+            Log.e(TAG, "PeerConnectionFactory is null when starting local video")
+            return
+        }
+        
         val audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
         localAudioTrack = peerConnectionFactory?.createAudioTrack("audio", audioSource)
 
@@ -261,6 +287,11 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun connectToSignallingServer() {
+        if (roomId.isBlank()) {
+            Log.e(TAG, "Cannot connect: Room ID is empty")
+            return
+        }
+        
         Log.d(TAG, "Connecting to signalling server: $SERVER_URL")
         val request = Request.Builder()
             .url(SERVER_URL)
@@ -326,6 +357,11 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun joinRoom() {
+        if (roomId.isBlank() || webSocket == null) {
+            Log.e(TAG, "Cannot join room: roomId is blank or websocket is null")
+            return
+        }
+        
         val message = JSONObject().apply {
             put("type", "join")
             put("roomId", roomId)
@@ -363,19 +399,39 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun handleOffer(json: JSONObject) {
-        remoteUserId = json.getString("userId")
-        val offerSdp = json.getString("offer")
-        Log.d(TAG, "Received offer from: $remoteUserId")
-        val sdp = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
-        peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
-        createAnswer()
+        try {
+            remoteUserId = json.getString("userId")
+            val offerSdp = json.getString("offer")
+            Log.d(TAG, "Received offer from: $remoteUserId")
+            
+            if (peerConnection == null) {
+                Log.e(TAG, "PeerConnection is null when handling offer")
+                return
+            }
+            
+            val sdp = SessionDescription(SessionDescription.Type.OFFER, offerSdp)
+            peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
+            createAnswer()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling offer: ${e.message}")
+        }
     }
 
     private fun handleAnswer(json: JSONObject) {
-        val answerSdp = json.getString("answer")
-        Log.d(TAG, "Received answer")
-        val sdp = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
-        peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
+        try {
+            val answerSdp = json.getString("answer")
+            Log.d(TAG, "Received answer")
+            
+            if (peerConnection == null) {
+                Log.e(TAG, "PeerConnection is null when handling answer")
+                return
+            }
+            
+            val sdp = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
+            peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling answer: ${e.message}")
+        }
     }
 
     private fun handleIceCandidate(json: JSONObject) {
@@ -458,6 +514,16 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun sendOffer(sessionDescription: SessionDescription) {
+        if (remoteUserId.isBlank()) {
+            Log.e(TAG, "Cannot send offer: remoteUserId is empty")
+            return
+        }
+        
+        if (webSocket == null) {
+            Log.e(TAG, "Cannot send offer: WebSocket is null")
+            return
+        }
+        
         val message = JSONObject().apply {
             put("type", "offer")
             put("roomId", roomId)
@@ -470,6 +536,16 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun sendAnswer(sessionDescription: SessionDescription) {
+        if (remoteUserId.isBlank()) {
+            Log.e(TAG, "Cannot send answer: remoteUserId is empty")
+            return
+        }
+        
+        if (webSocket == null) {
+            Log.e(TAG, "Cannot send answer: WebSocket is null")
+            return
+        }
+        
         val message = JSONObject().apply {
             put("type", "answer")
             put("roomId", roomId)
@@ -482,6 +558,16 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun sendIceCandidate(candidate: IceCandidate) {
+        if (remoteUserId.isBlank()) {
+            Log.e(TAG, "Cannot send ICE candidate: remoteUserId is empty")
+            return
+        }
+        
+        if (webSocket == null) {
+            Log.e(TAG, "Cannot send ICE candidate: WebSocket is null")
+            return
+        }
+        
         val message = JSONObject().apply {
             put("type", "ice-candidate")
             put("roomId", roomId)
@@ -518,6 +604,17 @@ class VideoCallActivity : AppCompatActivity() {
     private fun sendChatMessage() {
         val message = chatInput.text.toString().trim()
         if (message.isNotEmpty()) {
+            if (webSocket == null) {
+                Log.e(TAG, "Cannot send chat message: WebSocket is null")
+                Toast.makeText(this, "Нет подключения к серверу", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            if (roomId.isBlank()) {
+                Log.e(TAG, "Cannot send chat message: roomId is empty")
+                return
+            }
+            
             val jsonMessage = JSONObject().apply {
                 put("type", "chat-message")
                 put("roomId", roomId)
