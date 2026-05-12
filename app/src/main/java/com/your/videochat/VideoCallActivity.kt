@@ -850,14 +850,9 @@ class VideoCallActivity : AppCompatActivity() {
             return
         }
         
-        // Создаем PeerConnection если его нет
+        // PeerConnection уже создан в initializeWebRTC()
         if (peerConnection == null) {
-            Log.d(TAG, "📹 Creating PeerConnection in startLocalVideo...")
-            createPeerConnection()
-        }
-        
-        if (peerConnection == null) {
-            Log.e(TAG, "❌ Failed to create PeerConnection")
+            Log.e(TAG, "❌ PeerConnection is null - should be created in initializeWebRTC()")
             return
         }
         
@@ -1837,11 +1832,14 @@ class VideoCallActivity : AppCompatActivity() {
     private fun createOffer() {
         Log.d(TAG, "📞 Creating offer...")
         Log.d(TAG, "PeerConnection is null: ${peerConnection == null}")
+        Log.d(TAG, "PeerConnection ready state: ${peerConnection?.signalingState()}")
         Log.d(TAG, "Local video track is null: ${localVideoTrack == null}")
         Log.d(TAG, "Remote user ID is empty: ${remoteUserId.isEmpty()}")
+        Log.d(TAG, "Remote user ID: '$remoteUserId'")
         
         if (peerConnection == null) {
             Log.e(TAG, "❌ Cannot create offer: PeerConnection is null")
+            Log.e(TAG, "❌ This means PeerConnection was lost after creation!")
             return
         }
         
