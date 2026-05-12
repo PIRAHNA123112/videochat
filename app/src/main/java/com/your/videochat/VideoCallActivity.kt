@@ -819,8 +819,15 @@ class VideoCallActivity : AppCompatActivity() {
     }
 
     private fun joinRoom() {
+        Log.d(TAG, "🔍 joinRoom() called")
+        Log.d(TAG, "🔍 roomId: '$roomId'")
+        Log.d(TAG, "🔍 webSocket: ${webSocket != null}")
+        Log.d(TAG, "🔍 userId: '$userId'")
+        
         if (roomId.isBlank() || webSocket == null) {
-            Log.e(TAG, "Cannot join room: roomId is blank or websocket is null")
+            Log.e(TAG, "❌ Cannot join room: roomId is blank or websocket is null")
+            Log.e(TAG, "❌ roomId.isBlank(): ${roomId.isBlank()}")
+            Log.e(TAG, "❌ webSocket == null: ${webSocket == null}")
             return
         }
         
@@ -832,9 +839,16 @@ class VideoCallActivity : AppCompatActivity() {
             put("roomId", roomId)
             put("roomPassword", roomPassword)
         }
-        Log.d(TAG, "Joining secure room: $message")
-        Log.d(TAG, "Room ID: $roomId, User ID: $userId, Password: $roomPassword")
-        webSocket?.send(message.toString())
+        Log.d(TAG, "🚀 Joining secure room: $message")
+        Log.d(TAG, "🚀 Room ID: $roomId, User ID: $userId, Password: $roomPassword")
+        
+        try {
+            webSocket?.send(message.toString())
+            Log.d(TAG, "✅ Join message sent successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to send join message: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     private fun handleSignallingMessage(message: String) {
