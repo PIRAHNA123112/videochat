@@ -596,7 +596,7 @@ function sendSecureRoomsList(ws) {
 function broadcastSecureRoomsList() {
     try {
         const roomsList = Array.from(rooms.entries()).map(([id, users]) => ({
-            id: id.substring(0, 8) + '...', // Только первые 8 символов
+            id: id, // Полный ID комнаты для корректного входа
             usersCount: users.size,
             hasPassword: roomKeys.has(id)
         }));
