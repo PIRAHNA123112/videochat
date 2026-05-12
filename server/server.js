@@ -13,19 +13,37 @@ const wss = new WebSocket.Server({
     }
 });
 
-// Обработка upgrade запросов
+// Обработка upgrade запросов с детальным логированием
 server.on('upgrade', (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-    });
+    console.log('WebSocket upgrade request received');
+    console.log('Headers:', request.headers);
+    console.log('URL:', request.url);
+    
+    try {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            console.log('WebSocket connection established');
+            wss.emit('connection', ws, request);
+        });
+    } catch (error) {
+        console.error('WebSocket upgrade error:', error);
+        socket.destroy();
+    }
 });
 
 // CORS для HTTP запросов
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, WebSocket-Protocol');
     next();
+});
+
+// Обработка OPTIONS запросов для CORS
+app.options('*', (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, WebSocket-Protocol');
+    res.sendStatus(200);
 });
 
 // Health check endpoint для мониторинга
