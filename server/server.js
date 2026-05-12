@@ -231,7 +231,7 @@ const clients = new Map();
 loadRooms();
 
 wss.on('connection', (ws, req) => {
-    console.log('New WebSocket connection from:', req.url);
+    console.log('🔌 New WebSocket connection from:', req.url);
     console.log('Headers:', req.headers);
     console.log('Remote address:', req.socket.remoteAddress);
     
@@ -247,6 +247,8 @@ wss.on('connection', (ws, req) => {
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+            console.log(`📨 Received message from ${ws.userId || 'unknown'}:`, data.type);
+            
             // Обрабатываем ping от клиента
             if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong' }));
@@ -254,7 +256,8 @@ wss.on('connection', (ws, req) => {
             }
             handleMessage(ws, data);
         } catch (error) {
-            console.error('Ошибка обработки сообщения:', error);
+            console.error('❌ Ошибка обработки сообщения:', error);
+            console.error('Raw message:', message.toString());
         }
     });
 
@@ -488,12 +491,14 @@ function handleSecureJoin(ws, data) {
 
 function handleSecureOffer(ws, data) {
     const { roomId, targetUserId, offer } = data;
-    console.log(`Offer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`📞 Offer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`Target client exists: ${!!clients.get(targetUserId)}`);
+    console.log(`Target client ready: ${clients.get(targetUserId)?.readyState === WebSocket.OPEN}`);
     
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for offer:', targetUserId);
+        console.warn('❌ Target client not available for offer:', targetUserId);
         console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
@@ -501,32 +506,36 @@ function handleSecureOffer(ws, data) {
     try {
         // Валидация SDP оффера
         if (!offer || typeof offer !== 'string' || offer.length > 100000) {
-            console.warn('Invalid offer data');
+            console.warn('❌ Invalid offer data');
             ws.close(1003, 'Invalid offer data');
             return;
         }
         
-        targetClient.send(JSON.stringify({
+        const offerMessage = {
             type: 'offer',
             userId: ws.userId,
             offer: offer
-        }));
+        };
         
-        console.log(`Secure offer sent from ${ws.userId} to ${targetUserId}`);
+        targetClient.send(JSON.stringify(offerMessage));
+        console.log(`✅ Secure offer sent from ${ws.userId} to ${targetUserId}`);
+        console.log(`Offer message size: ${JSON.stringify(offerMessage).length} bytes`);
     } catch (error) {
-        console.error('Error sending secure offer:', error.message);
+        console.error('❌ Error sending secure offer:', error.message);
         clients.delete(targetUserId);
     }
 }
 
 function handleSecureAnswer(ws, data) {
     const { roomId, targetUserId, answer } = data;
-    console.log(`Answer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`📞 Answer from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`Target client exists: ${!!clients.get(targetUserId)}`);
+    console.log(`Target client ready: ${clients.get(targetUserId)?.readyState === WebSocket.OPEN}`);
     
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for answer:', targetUserId);
+        console.warn('❌ Target client not available for answer:', targetUserId);
         console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
@@ -534,32 +543,36 @@ function handleSecureAnswer(ws, data) {
     try {
         // Валидация SDP ответа
         if (!answer || typeof answer !== 'string' || answer.length > 100000) {
-            console.warn('Invalid answer data');
+            console.warn('❌ Invalid answer data');
             ws.close(1003, 'Invalid answer data');
             return;
         }
         
-        targetClient.send(JSON.stringify({
+        const answerMessage = {
             type: 'answer',
             userId: ws.userId,
             answer: answer
-        }));
+        };
         
-        console.log(`Secure answer sent from ${ws.userId} to ${targetUserId}`);
+        targetClient.send(JSON.stringify(answerMessage));
+        console.log(`✅ Secure answer sent from ${ws.userId} to ${targetUserId}`);
+        console.log(`Answer message size: ${JSON.stringify(answerMessage).length} bytes`);
     } catch (error) {
-        console.error('Error sending secure answer:', error.message);
+        console.error('❌ Error sending secure answer:', error.message);
         clients.delete(targetUserId);
     }
 }
 
 function handleSecureIceCandidate(ws, data) {
     const { roomId, targetUserId, candidate, sdpMid, sdpMLineIndex } = data;
-    console.log(`ICE candidate from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`🧊 ICE candidate from ${ws.userId} to ${targetUserId} in room ${roomId}`);
+    console.log(`Target client exists: ${!!clients.get(targetUserId)}`);
+    console.log(`Target client ready: ${clients.get(targetUserId)?.readyState === WebSocket.OPEN}`);
     
     const targetClient = clients.get(targetUserId);
     
     if (!targetClient || targetClient.readyState !== WebSocket.OPEN) {
-        console.warn('Target client not available for ICE candidate:', targetUserId);
+        console.warn('❌ Target client not available for ICE candidate:', targetUserId);
         console.log('Available clients:', Array.from(clients.keys()));
         return;
     }
@@ -567,22 +580,24 @@ function handleSecureIceCandidate(ws, data) {
     try {
         // Валидация ICE кандидата
         if (!candidate || typeof candidate !== 'string' || candidate.length > 1000) {
-            console.warn('Invalid ICE candidate data');
+            console.warn('❌ Invalid ICE candidate data');
             ws.close(1003, 'Invalid ICE candidate data');
             return;
         }
         
-        targetClient.send(JSON.stringify({
+        const iceMessage = {
             type: 'ice-candidate',
             userId: ws.userId,
             candidate: candidate,
             sdpMid: sdpMid,
             sdpMLineIndex: sdpMLineIndex
-        }));
+        };
         
-        console.log(`Secure ICE candidate sent from ${ws.userId} to ${targetUserId}`);
+        targetClient.send(JSON.stringify(iceMessage));
+        console.log(`✅ Secure ICE candidate sent from ${ws.userId} to ${targetUserId}`);
+        console.log(`ICE message size: ${JSON.stringify(iceMessage).length} bytes`);
     } catch (error) {
-        console.error('Error sending secure ICE candidate:', error.message);
+        console.error('❌ Error sending secure ICE candidate:', error.message);
         clients.delete(targetUserId);
     }
 }

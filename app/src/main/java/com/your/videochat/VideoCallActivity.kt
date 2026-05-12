@@ -838,15 +838,32 @@ class VideoCallActivity : AppCompatActivity() {
         try {
             val json = JSONObject(message)
             val type = json.getString("type")
-            Log.d(TAG, "Handling message type: $type")
+            Log.d(TAG, "📨 Handling message type: $type")
+            Log.d(TAG, "📨 Full message: $message")
 
             when (type) {
-                "offer" -> handleOffer(json)
-                "answer" -> handleAnswer(json)
-                "ice-candidate" -> handleIceCandidate(json)
-                "user-joined" -> handleUserJoined(json)
-                "room-users" -> handleRoomUsers(json)
+                "offer" -> {
+                    Log.d(TAG, "📞 Received offer message")
+                    handleOffer(json)
+                }
+                "answer" -> {
+                    Log.d(TAG, "📞 Received answer message")
+                    handleAnswer(json)
+                }
+                "ice-candidate" -> {
+                    Log.d(TAG, "🧊 Received ICE candidate message")
+                    handleIceCandidate(json)
+                }
+                "user-joined" -> {
+                    Log.d(TAG, "👤 Received user-joined message")
+                    handleUserJoined(json)
+                }
+                "room-users" -> {
+                    Log.d(TAG, "👥 Received room-users message")
+                    handleRoomUsers(json)
+                }
                 "user-left" -> {
+                    Log.d(TAG, "👋 Received user-left message")
                     remoteUserId = ""
                     runOnUiThread {
                         Toast.makeText(this, "Собеседник покинул комнату", Toast.LENGTH_SHORT).show()
@@ -991,7 +1008,10 @@ class VideoCallActivity : AppCompatActivity() {
                 // Если мы нашли собеседника и локальное видео запущено, создаем offer
                 if (localVideoTrack != null) {
                     Log.d(TAG, "📹 Local video ready, creating offer for remote user")
-                    createOffer()
+                    // Небольшая задержка чтобы убедиться что PeerConnection готов
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        createOffer()
+                    }, 1000)
                 } else {
                     Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
                 }
@@ -1006,22 +1026,45 @@ class VideoCallActivity : AppCompatActivity() {
 
     private fun handleUserJoined(json: JSONObject) {
         val newUserId = json.getString("userId")
-        Log.d(TAG, "User joined: $newUserId")
+        Log.d(TAG, "👤 User joined: $newUserId")
         
         // Первый пользователь в комнате создаёт offer
         if (remoteUserId.isEmpty()) {
             remoteUserId = newUserId
             // Проверяем готовность локального видео
             if (localVideoTrack != null) {
-                createOffer()
+                Log.d(TAG, "📹 Local video ready, creating offer for new user")
+                // Небольшая задержка чтобы убедиться что PeerConnection готов
+                Handler(Looper.getMainLooper()).postDelayed({
+                    createOffer()
+                }, 1000)
             } else {
-                Log.d(TAG, "Local video not ready yet, will create offer when ready")
+                Log.d(TAG, "⏳ Local video not ready yet, will create offer when ready")
             }
         }
     }
 
     private fun createOffer() {
-        Log.d(TAG, "Creating offer...")
+        Log.d(TAG, "📞 Creating offer...")
+        Log.d(TAG, "PeerConnection is null: ${peerConnection == null}")
+        Log.d(TAG, "Local video track is null: ${localVideoTrack == null}")
+        Log.d(TAG, "Remote user ID is empty: ${remoteUserId.isEmpty()}")
+        
+        if (peerConnection == null) {
+            Log.e(TAG, "❌ Cannot create offer: PeerConnection is null")
+            return
+        }
+        
+        if (localVideoTrack == null) {
+            Log.e(TAG, "❌ Cannot create offer: Local video track is null")
+            return
+        }
+        
+        if (remoteUserId.isEmpty()) {
+            Log.e(TAG, "❌ Cannot create offer: Remote user ID is empty")
+            return
+        }
+        
         val constraints = MediaConstraints().apply {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
